@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="rose">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no, interactive-widget=resizes-content">
+  <meta name="theme-color" content="#F6E3E7" id="app-theme-color">
+  <meta name="apple-mobile-web-app-title" content="Rifugio">
+  <link rel="manifest" href="./manifest.json">
+  <title>Rifugio · 我们的港湾</title>
+  <script>try{var t=localStorage.getItem('rifugio.theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
+  <link rel="stylesheet" href="./css/01-theme-vars.css">
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+  <main class="stage">
+    <div class="phone" id="phone">
+
+      <!-- 锁屏 · 玄关 -->
+      <div class="lock" id="lock">
+        <svg class="lock-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 7a4 4 0 1 1-4 4"/><path d="M10 11l-7 7v3h3v-2h2v-2h2l2-2"/></svg>
+        <div class="lock-time" id="lockTime">19:32</div>
+        <div class="lock-date" id="lockDate">FR 22 · 周五</div>
+        <div class="lock-ital">a password, please</div>
+        <div class="lock-dots" id="lockDots"><i></i><i></i><i></i><i></i></div>
+        <div class="lock-hint">输入任意四下，进入你的主屏</div>
+        <button class="lock-skip" id="lockSkip">先逛逛 →</button>
+      </div>
+
+      <!-- 主屏 launcher -->
+      <div class="dev" id="dev">
+        <div class="statusbar">
+          <b id="clock">19:32</b>
+          <span class="sicons"><i class="sig"></i><i class="wifi">⌁</i><b class="batt">85</b></span>
+        </div>
+        <div class="home-head">
+          <div>
+            <div class="hd-date" id="hdDate">FR 22 · 周五</div>
+            <div class="wordmark">Rifugio</div>
+          </div>
+          <div class="hh-btns">
+            <button class="hbtn" id="btnEdit">编辑</button>
+            <button class="hbtn round" id="btnTheme" title="换一套主题">✳</button>
+          </div>
+        </div>
+        <div class="pages" id="pages"></div>
+        <div class="dots" id="dots"></div>
+        <div class="wall-deco" aria-hidden="true">
+          <span class="wd-letters">BLOOM&nbsp;MY&nbsp;DAY</span>
+          <span class="wd-fl f1">❀</span><span class="wd-fl f2">❀</span><span class="wd-fl f3">✿</span>
+        </div>
+      </div>
+
+      <!-- 模块屏（点击 app 打开） -->
+      <div class="screens" id="screens"></div>
+
+    </div>
+  </main>
+  <div id="toast" role="status"></div>
+  <script src="./js/app.js"></script>
+</body>
+</html>

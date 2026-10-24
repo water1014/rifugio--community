@@ -1,0 +1,36 @@
+/* ============================================================
+   01-theme-vars.css — 设计令牌（Design Tokens）
+   架构核心：全部颜色是 CSS 变量，[data-theme] 一键切换，零 JS 重新着色。
+   ============================================================ */
+:root,
+[data-theme="rose"] {
+  --stage-bg: linear-gradient(165deg, #F3DEE3 0%, #FBEFF1 42%, #F6E3E8 100%);
+  --wall: #FBF2F4;
+  --wall-deco: rgba(201, 141, 158, .14);
+  --ink: #5A4750; --ink-2: #8D737D; --ink-3: #BBA3AD;
+  --card: #FFFFFF; --card-brd: #F5E2E7; --card-shadow: 0 18px 36px -20px rgba(158, 96, 115, .38);
+  --icon-bg: linear-gradient(180deg, #FEF8F9, #FAEDF0); --icon-brd: #F1DCE2;
+  --accent: #CE8398; --accent-2: #E9BCC7; --accent-soft: #F9E7EC;
+  --gold: #C8A96A; --photo-bg: linear-gradient(150deg, #F2E0E4, #E8D3DA);
+  --lock-veil: rgba(251, 242, 244, .55); --toast-bg: rgba(90, 71, 80, .92); --theme-color: #F6E3E7;
+}
+[data-theme="ivory"] {
+  --stage-bg: linear-gradient(165deg, #E9EDE6 0%, #F7F5F0 42%, #EDF0EA 100%);
+  --wall: #F7F6F1; --wall-deco: rgba(140, 155, 142, .14);
+  --ink: #46524A; --ink-2: #7C877E; --ink-3: #ACB5AC;
+  --card: #FFFFFF; --card-brd: #E6E8E0; --card-shadow: 0 18px 36px -20px rgba(96, 112, 98, .38);
+  --icon-bg: linear-gradient(180deg, #FCFCF9, #F2F4EE); --icon-brd: #E2E6DC;
+  --accent: #7FA08C; --accent-2: #B9CDBF; --accent-soft: #EBF1EC;
+  --gold: #A9905F; --photo-bg: linear-gradient(150deg, #E8EBE3, #DCE2D6);
+  --lock-veil: rgba(247, 246, 241, .55); --toast-bg: rgba(70, 82, 74, .92); --theme-color: #EDF0EA;
+}
+[data-theme="notte"] {
+  --stage-bg: linear-gradient(165deg, #241C22 0%, #33252E 55%, #2A2029 100%);
+  --wall: #221A20; --wall-deco: rgba(210, 160, 178, .10);
+  --ink: #F0E4E9; --ink-2: #C4A9B4; --ink-3: #8D7480;
+  --card: #2C2329; --card-brd: #3E313A; --card-shadow: 0 18px 36px -20px rgba(0, 0, 0, .6);
+  --icon-bg: linear-gradient(180deg, #322830, #2A2128); --icon-brd: #403239;
+  --accent: #D891A5; --accent-2: #8A5F70; --accent-soft: #3A2C34;
+  --gold: #D2B078; --photo-bg: linear-gradient(150deg, #3A2C34, #32262E);
+  --lock-veil: rgba(34, 26, 32, .55); --toast-bg: rgba(240, 228, 233, .92); --theme-color: #241C22;
+}
