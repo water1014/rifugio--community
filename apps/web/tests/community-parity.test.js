@@ -62,6 +62,8 @@ assert.match(talk, /provider: 'openai-compatible'/, 'Nido Talk must use the API 
 assert.match(talk, /talkSettings\.claudeExecutionMode = 'agent';\s*talkSettings\.executionMode = 'agent'/, 'Nido Talk must migrate legacy Claude Terminal preferences to API execution');
 assert.match(talkStream, /\['opencode-go', 'deepseek'\]\.includes\(talkSettings\.apiProtocol\)/, 'Talk chat must preserve explicit OpenCode Go and DeepSeek provider identifiers');
 assert.match(talk, /'\/api\/talk-api\/v1\/models'/, 'Talk model lookup must use the protocol-aware backend route');
+assert.match(talk, /apiModelsByProvider\[previousProtocol\].*apiModelsByProvider\[nextProtocol\]/s, 'Talk must remember model IDs separately for each API provider');
+assert.match(talk, /Do not let the active conversation's old model silently leak into the newly selected provider/, 'switching providers must not reuse the previous provider model');
 assert.match(talkStream, /provider:talkSettings\.apiProtocol === 'anthropic' \? 'anthropic' : \(\['opencode-go', 'deepseek'\]\.includes\(talkSettings\.apiProtocol\) \? talkSettings\.apiProtocol : 'compatible'\)/, 'Talk chat must preserve OpenCode Go and DeepSeek provider identifiers');
 assert.doesNotMatch(talkStream, /provider:'auto'/, 'Claude-named relay models must not silently switch to Anthropic auth');
 assert.match(index, /Nido 不依赖 Claude 订阅，支持 OpenCode Go、DeepSeek 和其他 OpenAI 兼容服务/, 'Talk settings must explain the API-first providers supported by Nido');
