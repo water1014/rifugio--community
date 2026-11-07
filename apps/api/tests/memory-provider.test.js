@@ -81,4 +81,26 @@ test('memory LLM settings encrypt credentials and discover OpenCode Go models wi
   assert.equal(captured.headers.get('authorization'), 'Bearer sk-private-test');
   assert.equal(captured.headers.get('x-nido-memory'), 'enabled');
   assert.match(captured.headers.get('x-opencode-session'), /^ses_[a-f0-9]{24}$/);
+
+  global.fetch = async (url, options = {}) => {
+    captured = { url:String(url), options, headers:new Headers(options.headers || {}) };
+    return new Response(JSON.stringify({ choices:[{ message:{ content:'Diario tradotto' } }] }), {
+      status:200, headers:{ 'content-type':'application/json' },
+    });
+  };
+  await handlers['POST /api/settings/llm/complete']({
+    body:{
+      system_prompt:'Translate faithfully.',
+      prompt:'Translate this private diary entry.',
+    },
+  }, res);
+  assert.equal(responseBody.ok, true);
+  assert.equal(responseBody.text, 'Diario tradotto');
+  assert.equal(responseBody.provider, 'opencode-go');
+  assert.equal(captured.url, 'https://opencode.ai/zen/go/v1/chat/completions');
+  assert.equal(captured.headers.get('authorization'), 'Bearer sk-private-test');
+  assert.equal(captured.headers.get('x-nido-memory'), 'enabled');
+  const completionBody = JSON.parse(captured.options.body);
+  assert.equal(completionBody.model, 'kimi-k3');
+  assert.equal(completionBody.messages[1].content, 'Translate this private diary entry.');
 });
