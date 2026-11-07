@@ -971,17 +971,17 @@ window.Rifugio.useTalkStream = function(ctx) {
                 }
             });
             const nidoChatEndpoint = (baseUrl, protocol) => {
-                const clean = String(baseUrl || '').trim().replace(/\\/+$/, '');
-                if (!/^https:\\/\\//i.test(clean)) throw new Error('API 地址必须使用 HTTPS');
+                const clean = String(baseUrl || '').trim().replace(/\/+$/, '');
+                if (!/^https:\/\//i.test(clean)) throw new Error('API 地址必须使用 HTTPS');
                 const parsed = new URL(clean);
                 if (parsed.hostname.toLowerCase() === 'opencode.ai') {
-                    if (/\\/zen\\/go$/i.test(parsed.pathname)) return clean + '/v1/chat/completions';
-                    if (/\\/inference\\/go\\/openai\\/v1$/i.test(parsed.pathname)) return clean + '/chat/completions';
-                    if (/\\/inference\\/go$/i.test(parsed.pathname)) return clean + '/openai/v1/chat/completions';
+                    if (/\/zen\/go$/i.test(parsed.pathname)) return clean + '/v1/chat/completions';
+                    if (/\/inference\/go\/openai\/v1$/i.test(parsed.pathname)) return clean + '/chat/completions';
+                    if (/\/inference\/go$/i.test(parsed.pathname)) return clean + '/openai/v1/chat/completions';
                 }
                 if (protocol === 'anthropic') throw new Error('本地版暂不支持 Anthropic Messages 协议，请选择 OpenCode Go、DeepSeek 或 OpenAI 兼容接口');
-                if (/\\/chat\\/completions$/i.test(clean)) return clean;
-                if (/\\/models$/i.test(clean)) return clean.replace(/\\/models$/i, '/chat/completions');
+                if (/\/chat\/completions$/i.test(clean)) return clean;
+                if (/\/models$/i.test(clean)) return clean.replace(/\/models$/i, '/chat/completions');
                 return clean + '/chat/completions';
             };
             const nidoProviderHeaders = () => {
@@ -997,7 +997,7 @@ window.Rifugio.useTalkStream = function(ctx) {
                     }
                 }
                 for (const [name, value] of Object.entries(custom)) {
-                    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,80}$/.test(name) || /[\\r\\n]/.test(String(value))) continue;
+                    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,80}$/.test(name) || /[\r\n]/.test(String(value))) continue;
                     const old = Object.keys(headers).find(key => key.toLowerCase() === name.toLowerCase());
                     if (old) delete headers[old];
                     headers[name] = String(value);
