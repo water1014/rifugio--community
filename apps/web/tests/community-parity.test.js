@@ -57,7 +57,9 @@ assert.ok(chat.includes("fetch('/api/talk-api/v1/chat/completions'"), 'legacy ch
 assert.ok(!chat.includes("fetch(\`\$\{base\}/chat/completions\`"), 'legacy chat must not call provider URLs from the browser');
 assert.ok(!app.includes("port.id === 'cc' ||"), 'changing the CC seat to an external provider must not bypass the backend proxy');
 assert.equal((app.match(/const isCc = \/\^\\\/api\\\/chatroom-cc/g) || []).length, 2, 'only the same-origin CC shim may use the direct seat path');
-assert.match(talk, /apiProtocol:\s*'compatible'/, 'community Talk must default relay APIs to OpenAI-compatible protocol');
+assert.match(talk, /apiProtocol:\s*'opencode-go'/, 'Nido Talk must default relay APIs to OpenCode Go');
+assert.match(talk, /provider: 'openai-compatible'/, 'Nido Talk must use the API provider instead of Claude Terminal by default');
+assert.match(talkStream, /\['opencode-go', 'deepseek'\]\.includes\(talkSettings\.apiProtocol\)/, 'Talk chat must preserve explicit OpenCode Go and DeepSeek provider identifiers');
 assert.match(talk, /'\/api\/talk-api\/v1\/models'/, 'Talk model lookup must use the protocol-aware backend route');
 assert.match(talkStream, /provider:talkSettings\.apiProtocol === 'anthropic' \? 'anthropic' : 'compatible'/, 'Talk chat must honor the explicit API protocol');
 assert.doesNotMatch(talkStream, /provider:'auto'/, 'Claude-named relay models must not silently switch to Anthropic auth');
