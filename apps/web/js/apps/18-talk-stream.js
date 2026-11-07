@@ -1026,6 +1026,7 @@ window.Rifugio.useTalkStream = function(ctx) {
                                 provider:talkSettings.apiProtocol === 'anthropic' ? 'anthropic' : 'compatible',
                                 base_url:base,
                                 api_key:talkSettings.apiKey,
+                                custom_headers:talkSettings.customHeaders,
                                 model:talkSettings.apiModel || c.model || 'gpt-4o-mini',
                                 messages,
                                 temperature:.85,
