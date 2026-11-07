@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const root = path.resolve(__dirname, '../..');
+const root = path.resolve(__dirname, '../../..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
 const studio = read('apps/web/js/apps/18-talk-image.js');
