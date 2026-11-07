@@ -314,7 +314,7 @@ window.Rifugio.useTalk = function(ctx) {
             if (talkSettings.virtualCameraImage && !talkSettings.userVideoCardImage) talkSettings.userVideoCardImage = talkSettings.virtualCameraImage;
             const normalizeTalkModel = (model) => {
                 const value = String(model || '').trim();
-                if (!value) return talkSettings.claudeModel || 'default';
+                if (!value) return String(talkSettings.apiModel || '').trim();
                 return value.length > 96 ? 'default' : value;
             };
             const talkScroll = ref(null);
@@ -1463,7 +1463,7 @@ window.Rifugio.useTalk = function(ctx) {
             };
 
             const newTalk = () => {
-                const rememberedModel = localStorage.getItem('rifugio-talk-model') || talkSettings.claudeModel || 'default';
+                const rememberedModel = talkSettings.apiModel || localStorage.getItem('rifugio-talk-model') || '';
                 const c = { id: 'c' + Date.now(), name: '新对话', group_name:'', group:'', remark:'', pinned:false, persona: '', model: normalizeTalkModel(rememberedModel), messages: [], created_at: new Date().toISOString() };
                 talk.convos.unshift(c);
                 talk.activeId = c.id;
@@ -1575,9 +1575,9 @@ window.Rifugio.useTalk = function(ctx) {
                 endTalkConvoDrag();
             };
             const onModelChange = () => {
-                // 设置和头部选择器都绑 talkSettings.claudeModel；切换时同步到当前对话并记住，给下次新对话用
-                if (activeConvo.value) activeConvo.value.model = talkSettings.claudeModel;
-                localStorage.setItem('rifugio-talk-model', talkSettings.claudeModel);
+                // API 模型由用户配置；同步到当前会话并记住，供新对话使用。
+                if (activeConvo.value) activeConvo.value.model = talkSettings.apiModel;
+                localStorage.setItem('rifugio-talk-model', talkSettings.apiModel || '');
                 saveTalkSettings();
                 if (activeConvo.value) { saveTalk(); pushConvoMeta(activeConvo.value); }
             };
