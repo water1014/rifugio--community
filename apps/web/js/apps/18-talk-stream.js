@@ -948,6 +948,7 @@ window.Rifugio.useTalkStream = function(ctx) {
                         text:async () => body,
                         json:async () => JSON.parse(body || '{}'),
                         nativeError:String(envelope.error || ''),
+                        imageDataUrl:String(envelope.imageDataUrl || ''),
                     });
                 } catch (error) {
                     pending.reject(new Error('Android 网络桥返回了无法识别的数据'));
@@ -990,6 +991,24 @@ window.Rifugio.useTalkStream = function(ctx) {
             window.NidoNativeHttp = window.NidoNativeHttp || {};
             window.NidoNativeHttp.postJson = nidoNativePostJson;
             window.NidoNativeHttp.getJson = nidoNativeGetJson;
+            const nidoNativePostNaiImage = (url, headers, payload) => new Promise((resolve, reject) => {
+                const bridge = window.NidoNative;
+                if (!bridge?.postNaiImage) { reject(new Error('当前 APK 尚未包含 NAI 原生生图模块，请更新到最新构建')); return; }
+                const requestId = 'nido-nai-' + (++nidoNativeRequestSequence) + '-' + Date.now();
+                const timer = setTimeout(() => {
+                    nidoNativePendingRequests.delete(requestId);
+                    reject(new Error('NAI 生图超时，请稍后重试'));
+                }, 190000);
+                nidoNativePendingRequests.set(requestId, { resolve, reject, timer });
+                try {
+                    bridge.postNaiImage(requestId, String(url), JSON.stringify(headers || {}), JSON.stringify(payload || {}));
+                } catch (error) {
+                    clearTimeout(timer);
+                    nidoNativePendingRequests.delete(requestId);
+                    reject(new Error(error?.message || '无法启动 NAI 生图请求'));
+                }
+            });
+            window.NidoNativeHttp.postNaiImage = nidoNativePostNaiImage;
 
             const nidoChatEndpoint = (baseUrl, protocol) => {
                 const clean = String(baseUrl || '').trim().replace(/\/+$/, '');
