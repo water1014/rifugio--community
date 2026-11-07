@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
-const image = fs.readFileSync(path.join(root, 'js/apps/18-talk-image.js'), 'utf8');
+  assert.match(html, /18-talk-image\\.js\\?v=nido-local-nai-[a-z0-9-]+/);
 const stream = fs.readFileSync(path.join(root, 'js/apps/18-talk-stream.js'), 'utf8');
 const talk = fs.readFileSync(path.join(root, 'js/apps/18-talk.js'), 'utf8');
 const native = fs.readFileSync(path.resolve(root, '../../android-shell/app/src/main/java/app/rifugio/shell/MainActivity.java'), 'utf8');
