@@ -136,7 +136,7 @@ function createSettingsMemoryRoutes(ctx = {}) {
 
         stored.provider = provider || stored.provider || 'compatible';
         stored.base_url = base_url || stored.base_url;
-        stored.model = model || stored.model;
+        stored.model = model !== undefined ? String(model || '').trim() : stored.model;
         stored.merge_prompt = merge_prompt !== undefined ? merge_prompt : stored.merge_prompt;
 
         // API credentials and custom headers are encrypted at rest.
@@ -217,7 +217,8 @@ function createSettingsMemoryRoutes(ctx = {}) {
         const memText = memories.map(m => `[${m.created_at}] [${m.category}] ${m.content}`).join('\n');
 
         // Call LLM
-        const model = String(settings.model || 'gpt-4o-mini').trim();
+        const model = String(settings.model || '').trim();
+        if (!model) return res.json({ ok: false, error: '请先在记忆导入设置中选择模型 ID' });
         const provider = providerFor(settings.provider, settings.base_url || 'https://api.openai.com/v1', model);
         const checked = await validatePublicBaseUrl(settings.base_url || 'https://api.openai.com/v1');
         const endpoint = endpointFor(checked.toString().replace(/\/$/, ''), provider);
