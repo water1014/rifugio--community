@@ -1,5 +1,5 @@
     const { createApp, ref, computed, reactive, onMounted, onUnmounted } = Vue;
-    createApp({
+    const nidoVueApp = createApp({
         setup() {
             // iOS 版布局热修复：清理上一版可能留下的空布局/停在 App 页的缓存，避免打开只剩粉色背景。
             try {
@@ -3945,4 +3945,10 @@ return {
                 talkCall, callVideoRef, talkCallElapsed, requestAiTalkCall, rejectAiTalkCall, acceptAiTalkCall, startTalkCall, startVideoTalkCall, endTalkCall, restoreTalkCall, toggleCallMute, toggleHandsFree, toggleCallCamera, sendCallTurn,
             }
         }
-    }).mount('#app');
+    });
+    nidoVueApp.config.errorHandler = (error, instance, info) => {
+        console.error('[Nido Vue]', info, error);
+        if (window.__NIDO_REPORT_BOOT_ERROR__) window.__NIDO_REPORT_BOOT_ERROR__('Vue 启动/页面错误', error && (error.stack || error.message) || String(error));
+    };
+    nidoVueApp.mount('#app');
+    window.__NIDO_VUE_APP_MOUNTED__ = true;
