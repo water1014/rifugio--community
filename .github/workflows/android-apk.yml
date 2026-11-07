@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/android-api-providers
+      - feature/nido-android-rebuild
     paths:
       - 'android-shell/**'
       - 'apps/api/**'
@@ -12,7 +13,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: nido-android-api-${{ github.ref }}
+  group: nido-android-rebuild-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   build:
