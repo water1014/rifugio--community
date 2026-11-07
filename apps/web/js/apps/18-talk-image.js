@@ -273,10 +273,31 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
                     return;
                 }
                 imageStudio.testGenerating = true;
-                imageStudio.testGenerateStatus = '已点击生成，正在请求 /api/image/generate…';
+                imageStudio.testGenerateStatus = imageStudio.localMode
+                    ? '正在从手机直连 NovelAI，等待图片…'
+                    : '已点击生成，正在请求 /api/image/generate…';
                 revokeImageStudioObjectUrls();
                 imageStudio.testImages = [];
                 try {
+                    if (imageStudio.localMode) {
+                        if (normalizeImageProvider() !== 'novelai') throw new Error('Nido 本地版目前只接入 NovelAI 生图');
+                        const key = String(talkSettings.naiApiKey || '').trim();
+                        if (!key) throw new Error('请先填写 NovelAI API Key');
+                        if (!window.NidoNativeHttp?.postNaiImage) throw new Error('当前 APK 缺少 NAI 原生生图模块，请更新 APK');
+                        const base = normalizeImageBaseUrl(talkSettings.imageBaseUrl, 'novelai') || 'https://image.novelai.net';
+                        const endpoint = base.replace(/\/+$/, '') + '/ai/generate-image';
+                        const payload = buildNaiLocalRequest(actionPrompt);
+                        const r = await window.NidoNativeHttp.postNaiImage(endpoint, {
+                            Authorization:'Bearer ' + key,
+                            Accept:'application/x-zip-compressed, application/zip, image/png, image/webp, application/json',
+                        }, payload);
+                        if (!r.ok) throw new Error(r.nativeError || 'NovelAI 请求失败（HTTP ' + r.status + '）');
+                        const images = Array.isArray(r.imageDataUrls) ? r.imageDataUrls : (r.imageDataUrl ? [r.imageDataUrl] : []);
+                        if (!images.length) throw new Error(r.nativeError || 'NovelAI 没有返回图片');
+                        imageStudio.testImages = images;
+                        imageStudio.testGenerateStatus = 'NAI 生图成功 ✓ 共 ' + images.length + ' 张';
+                        return;
+                    }
                     const body = buildImageConfigPayload({ includeKey:true });
                     body.scene = actionPrompt;
                     body.actionPrompt = actionPrompt;
