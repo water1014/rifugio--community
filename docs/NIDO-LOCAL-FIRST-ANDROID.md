@@ -104,3 +104,9 @@ These features may later be offered as optional add-ons, but the app must remain
 - Added a local chat function tool for API providers. When the configured model requests `nido_generate_image`, Nido calls NovelAI directly and attaches the resulting image(s) to the assistant message. Generated image binaries are kept in IndexedDB rather than the small localStorage recovery snapshot.
 - Added web regression checks for the local NAI route, encrypted-key storage, native ZIP extraction, chat tool wiring, and local image persistence.
 - Not yet live-verified with the user's NovelAI key or on a physical Android device. GitHub Actions must pass native Java compilation and web/API tests before a new APK is considered installable. Third-party NAI endpoints may have provider-specific authentication/header requirements and need real-device testing.
+
+### L2 verification build
+- GitHub Actions run: [42365359153](https://github.com/water1014/rifugio--community/actions/runs/42365359153), commit `cbc3555eeefb1aa0390f5ad4077a029ac0d2353f` on `feature/android-api-providers`.
+- API contract tests passed; all web tests passed, including local NAI and IndexedDB regression checks; Android debug APK compiled and packaged successfully.
+- Artifact: `nido-android-debug-apk`, 6,477,737 bytes, artifact ID `13571855003`, expires 2026-11-21.
+- This verifies compilation and automated tests only. No live NovelAI key was used, and no physical-device image request has been verified yet.
