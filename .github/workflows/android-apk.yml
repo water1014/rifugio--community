@@ -12,6 +12,9 @@ on:
       - '.github/workflows/android-apk.yml'
 permissions:
   contents: read
+concurrency:
+  group: rifugio-android-api-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest
