@@ -4,7 +4,7 @@ window.Rifugio.useTalk = function(ctx) {
     const { ref, reactive, computed, onMounted, onUnmounted } = Vue;
     with (ctx) {
             // ============================================================
-            // TALK · 和真正的 Claude 对话（乐玩 → Chat）Phase 1
+            // TALK · Nido API 对话（乐玩 → Chat）
             // 后端 /api/chat 桥接 claude CLI，多对话 / 可命名 / 带记忆 / 可切模型
             // ============================================================
             const TALK_LS = 'rifugio-talk-v1';
@@ -173,7 +173,7 @@ window.Rifugio.useTalk = function(ctx) {
                 aiVideoCardImage: '',
                 provider: 'openai-compatible',
                 executionMode: 'agent',
-                claudeExecutionMode: 'terminal',
+                claudeExecutionMode: 'agent',
                 autoSessionRelay:true,          // 到一定轮数后自动用新 Claude Code session 接力
                 autoSessionRelayTurns:40,
                 messageFontSize:13,
@@ -307,14 +307,10 @@ window.Rifugio.useTalk = function(ctx) {
             if (talkSettings.provider === 'claude-code') talkSettings.provider = 'openai-compatible';
             if (!['compatible', 'opencode-go', 'deepseek', 'anthropic'].includes(String(talkSettings.apiProtocol || ''))) talkSettings.apiProtocol = 'opencode-go';
             if (String(talkSettings.baseUrl || '').includes('opencode.ai') && talkSettings.apiProtocol === 'compatible') talkSettings.apiProtocol = 'opencode-go';
-            if (!['agent', 'terminal'].includes(String(talkSettings.executionMode || ''))) talkSettings.executionMode = 'agent';
-            // API 大脑只接管当前消息，不能覆盖用户为 Claude 保存的 Terminal / -p 偏好。
-            if (['agent', 'terminal'].includes(String(savedTalkSettings.claudeExecutionMode || ''))) {
-                talkSettings.claudeExecutionMode = savedTalkSettings.claudeExecutionMode;
-            } else {
-                talkSettings.claudeExecutionMode = talkSettings.provider === 'openai-compatible' ? 'terminal' : talkSettings.executionMode;
-            }
-            talkSettings.executionMode = talkSettings.claudeExecutionMode;
+            // Nido Talk uses the selected API provider as its only default execution path.
+            // Migrate legacy Claude Terminal / -p preferences so background status polling never depends on a Claude subscription.
+            talkSettings.claudeExecutionMode = 'agent';
+            talkSettings.executionMode = 'agent';
             if (talkSettings.virtualCameraImage && !talkSettings.userVideoCardImage) talkSettings.userVideoCardImage = talkSettings.virtualCameraImage;
             const normalizeTalkModel = (model) => {
                 const value = String(model || '').trim();
