@@ -27,7 +27,7 @@ window.Rifugio.useTalkStickers = function(ctx) {
                 name:String(s.name || s.semantic || '表情包'),
                 url:String(s.url || s.data_url || s.dataUrl || ''),
                 dataUrl:String(s.data_url || s.dataUrl || ''),
-                category:String(s.category || STICKER_DEFAULT_CAT),
+                category:String(s.category || '未分类'),
                 keywords:String(s.keywords || ''),
                 semantic:String(s.semantic || s.name || ''),
                 stolenFrom:String(s.stolen_from || s.stolenFrom || ''),
