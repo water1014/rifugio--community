@@ -133,7 +133,7 @@ public class NidoProactiveWorker extends Worker {
                 String value = custom.optString(name, "");
                 String lower = name.toLowerCase(Locale.ROOT);
                 if (!name.matches("[!#$%&'*+.^_`|~0-9A-Za-z-]{1,80}") || value.length() > 8192
-                        || value.contains("\\r") || value.contains("\\n")
+                        || value.contains("\r") || value.contains("\n")
                         || lower.equals("host") || lower.equals("content-length")
                         || lower.equals("connection") || lower.equals("cookie")
                         || lower.equals("set-cookie") || lower.startsWith("proxy-")
