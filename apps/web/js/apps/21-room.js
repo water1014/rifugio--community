@@ -101,7 +101,7 @@ window.Rifugio.useCrabRoom = function(ctx) {
             mother:String(savedProfile.mother || savedProfile.mom || 'User'),
             species:String(savedProfile.species || '像素螃蟹'),
             personality:String(savedProfile.personality || '贪吃、爱装酷、学东西慢但认真、被摸会吹泡泡、深夜自己翻肚皮睡觉'),
-            bio:String(savedProfile.bio || '刚刚来到 Rifugio 的小宝宝，正在慢慢认识这个世界。'),
+            bio:String(savedProfile.bio || '刚刚来到 Nido 的小宝宝，正在慢慢认识这个世界。'),
         });
         const petUi = reactive({
             menuOpen:false, foodOpen:false, profileOpen:false, busy:false,
