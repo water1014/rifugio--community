@@ -88,7 +88,7 @@ function createPushRoutes({ readJsonSetting, writeJsonSetting }) {
     const webPush = configureWebPush();
     if (!webPush) return { ok: false, unavailable: true, sent: 0, failed: 0 };
     const body = JSON.stringify({
-      title: String(payload.title || 'Rifugio').slice(0, 80),
+      title: String(payload.title || 'Nido').slice(0, 80),
       body: String(payload.body || '有新消息').slice(0, 180),
       icon: payload.icon || '/icon.svg',
       badge: payload.badge || '/icon.svg',
@@ -138,7 +138,7 @@ function createPushRoutes({ readJsonSetting, writeJsonSetting }) {
     app.post('/api/push/test', async (req, res) => {
       try {
         const result = await sendWebPushNotification({
-          title: req.body?.title || 'Rifugio',
+          title: req.body?.title || 'Nido',
           body: req.body?.body || '系统通知测试成功。',
           tag: 'rifugio-test',
           data: { app: 'talk', test: true },
