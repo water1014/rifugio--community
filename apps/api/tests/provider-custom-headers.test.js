@@ -30,6 +30,12 @@ test('allows an explicit authorization or API-key override for subscription gate
   );
 });
 
+test('merges header names case-insensitively', () => {
+  const headers = providerRequestHeaders('fallback-key', { authorization: 'Bearer override' }, 'compatible');
+  assert.equal(Object.keys(headers).filter(name => name.toLowerCase() === 'authorization').length, 1);
+  assert.equal(headers.authorization, 'Bearer override');
+});
+
 test('rejects malformed, unsafe, and oversized custom headers', () => {
   assert.throws(() => normalizeCustomHeaders('not-json'), /有效 JSON/);
   assert.throws(() => normalizeCustomHeaders([]), /JSON 对象/);
