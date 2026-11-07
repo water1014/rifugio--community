@@ -970,6 +970,27 @@ window.Rifugio.useTalkStream = function(ctx) {
                     reject(new Error(error?.message || '无法启动 Android 网络请求'));
                 }
             });
+            const nidoNativeGetJson = (url, headers) => new Promise((resolve, reject) => {
+                const bridge = window.NidoNative;
+                if (!bridge?.getJson) { reject(new Error('Android 原生网络桥不支持 GET')); return; }
+                const requestId = 'nido-http-' + (++nidoNativeRequestSequence) + '-' + Date.now();
+                const timer = setTimeout(() => {
+                    nidoNativePendingRequests.delete(requestId);
+                    reject(new Error('请求超时，请检查网络或服务商状态'));
+                }, 45000);
+                nidoNativePendingRequests.set(requestId, { resolve, reject, timer });
+                try {
+                    bridge.getJson(requestId, String(url), JSON.stringify(headers || {}));
+                } catch (error) {
+                    clearTimeout(timer);
+                    nidoNativePendingRequests.delete(requestId);
+                    reject(new Error(error?.message || '无法启动 Android 网络请求'));
+                }
+            });
+            window.NidoNativeHttp = window.NidoNativeHttp || {};
+            window.NidoNativeHttp.postJson = nidoNativePostJson;
+            window.NidoNativeHttp.getJson = nidoNativeGetJson;
+
             const nidoChatEndpoint = (baseUrl, protocol) => {
                 const clean = String(baseUrl || '').trim().replace(/\/+$/, '');
                 if (!/^https:\/\//i.test(clean)) throw new Error('API 地址必须使用 HTTPS');
