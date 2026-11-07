@@ -29,10 +29,11 @@ The current Web Push subscription is a browser Service Worker subscription. It i
 Target Android delivery:
 
 - Native Android notification channels and Android 13+ notification permission.
-- A native Firebase Messaging service now receives messages, renders high-importance notifications, persists registration tokens, and forwards notification-tap conversation IDs into the Talk UI.
-- The server now has authenticated Android token registration, encrypted token-at-rest storage, and an FCM HTTP v1 sender using a service-account JSON secret from the environment.
-- The proactive scheduler fans out to both existing Web Push subscriptions and registered Android devices.
-- FCM remains unconfigured until an app-specific `google-services.json` is supplied to the Android build and `FCM_SERVICE_ACCOUNT_JSON` (raw JSON or base64 JSON) is configured on the server.
+- A native UnifiedPush connector and service now receive encrypted Web Push payloads from a user-selected distributor, render high-importance notifications, persist endpoint/key material, and forward notification-tap conversation IDs into the Talk UI.
+- UnifiedPush registrations reuse the existing Web Push/VAPID backend route. Endpoint registration is authenticated and public-HTTPS validated to block private-network SSRF; the sender revalidates endpoints before each delivery.
+- An optional native Firebase Messaging service and FCM HTTP v1 sender are also implemented for devices with Google Play services, using encrypted registration tokens and a server-side service-account JSON secret.
+- The proactive scheduler fans out to existing browser Web Push subscriptions, UnifiedPush devices, and optional FCM devices.
+- UnifiedPush requires a compatible distributor app to be installed and selected. FCM remains unconfigured until an app-specific `google-services.json` is supplied to the Android build and `FCM_SERVICE_ACCOUNT_JSON` (raw JSON or base64 JSON) is configured on the server.
 - Backend stores per-install push tokens securely and sends notifications when the proactive scheduler creates a message.
 - Notification payload contains a conversation ID and message ID; tapping it opens that exact conversation in Nido.
 - Deduplicate notifications and messages, remove expired device tokens, and never put private message bodies in logs.
