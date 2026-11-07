@@ -135,7 +135,12 @@ public class MainActivity extends Activity {
         if (webView == null || webView.getUrl() == null || !webView.getUrl().startsWith("https://")) return;
         String raw = getSharedPreferences(NidoMessagingService.PREFS, MODE_PRIVATE)
                 .getString("unified_push_subscription", "");
-        if (raw == null || raw.isEmpty()) return;
+        if (raw == null || raw.isEmpty()) {
+            webView.evaluateJavascript(
+                    "window.dispatchEvent(new CustomEvent('nido:push-subscription',{detail:{removed:true}}));",
+                    null);
+            return;
+        }
         String script = "window.dispatchEvent(new CustomEvent('nido:push-subscription',{detail:"
                 + raw + "}));";
         webView.evaluateJavascript(script, null);
