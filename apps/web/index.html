@@ -912,8 +912,10 @@
                 </div>
                 <label>Base URL（仅开放安全白名单中的官方 HTTPS 域名）</label>
                 <input v-model="petUi.ai.base_url" placeholder="OpenCode Go: https://opencode.ai/zen/go">
-                <label>API Key（只在服务端加密保存）</label>
-                <input v-model="petUi.ai.api_key" type="password" autocomplete="new-password" placeholder="sk-..." @focus="petUi.ai.api_key.includes('***') && (petUi.ai.api_key='')">
+                <label>API Key / 订阅令牌（只在服务端加密保存）</label>
+                <input v-model="petUi.ai.api_key" type="password" autocomplete="new-password" placeholder="填写当前服务的 Key" @focus="petUi.ai.api_key.includes('***') && (petUi.ai.api_key='')">
+                <label>自定义请求头（JSON，可选）</label>
+                <textarea v-model="petUi.ai.custom_headers" rows="3" placeholder='{"X-Client-Tag":"Nido"}'></textarea>
                 <label>Model</label>
                 <input v-model="petUi.ai.model" placeholder="填写这个服务商实际提供的模型名">
                 <div class="pet-ai-daily-row">
