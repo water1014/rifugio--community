@@ -405,7 +405,7 @@ function createTalkProactive(ctx = {}) {
     talkProactiveRunning = true;
     try {
       const prompt = [
-        `Rifugio System Auto-Prompt：\n对方已经${minutes}分钟没有联系你。请结合当前对话上下文，判断对方最后做了什么、你们聊到了哪里，再自然地主动发一条符合当前情境的消息吧～。如果上下文不足，不要编造，也不要只复述“多久没联系”。`,
+        `Nido System Auto-Prompt：\n对方已经${minutes}分钟没有联系你。请结合当前对话上下文，判断对方最后做了什么、你们聊到了哪里，再自然地主动发一条符合当前情境的消息吧～。如果上下文不足，不要编造，也不要只复述“多久没联系”。`,
         `主动脚本当前允许时间窗：${settings.activeStart || '全天'}-${settings.activeEnd || '全天'}（${settings.timezone || process.env.TZ || 'local'}）。时间窗外系统不会注入你。`,
         settings.barkUrl ? [
           'Bark：用户提供了 Bark URL/模板，后端会在本次主动消息生成后自动发送 push notification。',
