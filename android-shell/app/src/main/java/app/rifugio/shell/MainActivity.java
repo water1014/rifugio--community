@@ -393,16 +393,8 @@ public class MainActivity extends Activity {
         String extension = mime.equals("image/webp") ? ".webp" : (mime.equals("image/jpeg") ? ".jpg" : ".png");
         File directory = new File(getFilesDir(), "nido-images");
         if (!directory.exists() && !directory.mkdirs()) throw new IllegalStateException("无法创建本地图片目录");
-        File[] existing = directory.listFiles();
-        if (existing != null && existing.length >= 200) {
-            java.util.Arrays.sort(existing, java.util.Comparator.comparingLong(File::lastModified));
-            for (int i = 0; i <= existing.length - 200; i++) {
-                String oldName = existing[i].getName();
-                if (oldName.matches("[a-zA-Z0-9_-]{1,80}\\.(png|webp|jpg)$")) {
-                    try { existing[i].delete(); } catch (Exception ignored) {}
-                }
-            }
-        }
+        // Keep generated images for old chat attachments. Do not silently prune files
+        // while conversations still reference their app-private URLs.
         String name = Long.toString(System.currentTimeMillis(), 36) + "-"
                 + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 12) + extension;
         File target = new File(directory, name);
@@ -438,6 +430,10 @@ public class MainActivity extends Activity {
         httpExecutor.execute(() -> {
             JSONObject result = new JSONObject();
             HttpURLConnection connection = null;
+            int responseStatus = 0;
+            String responseContentType = "";
+            long declaredLength = -1;
+            int responseBytesRead = 0;
             try {
                 URL url = new URL(rawUrl);
                 if (!"https".equalsIgnoreCase(url.getProtocol()) || url.getUserInfo() != null
@@ -456,7 +452,7 @@ public class MainActivity extends Activity {
                 connection.setReadTimeout(180000);
                 connection.setDoOutput(true);
                 connection.setRequestProperty("Content-Type", "application/json");
-                connection.setRequestProperty("Accept", "application/x-zip-compressed, application/zip, image/png, image/webp, application/json");
+                connection.setRequestProperty("Accept", "application/x-zip-compressed, application/zip, application/octet-stream, image/png, image/webp, application/json");
                 JSONObject headers = new JSONObject(rawHeaders == null ? "{}" : rawHeaders);
                 Iterator<String> names = headers.keys();
                 while (names.hasNext()) {
@@ -472,20 +468,23 @@ public class MainActivity extends Activity {
                     connection.setRequestProperty(name, value);
                 }
                 try (OutputStream output = connection.getOutputStream()) { output.write(requestBody); }
-                int status = connection.getResponseCode();
-                result.put("status", status);
-                if (status >= 300 && status < 400) {
+                responseStatus = connection.getResponseCode();
+                responseContentType = String.valueOf(connection.getContentType() == null ? "" : connection.getContentType());
+                declaredLength = connection.getHeaderFieldLong("Content-Length", -1L);
+                result.put("status", responseStatus);
+                if (responseStatus >= 300 && responseStatus < 400) {
                     result.put("error", "NAI 重定向已拒绝，请检查 Base URL");
-                } else if (status < 200 || status >= 300) {
+                } else if (responseStatus < 200 || responseStatus >= 300) {
                     byte[] error = readBytesLimited(connection.getErrorStream(), 1024 * 1024);
                     String detail = new String(error, StandardCharsets.UTF_8);
                     try {
                         JSONObject json = new JSONObject(detail);
                         detail = json.optString("message", json.optString("error", detail));
                     } catch (Exception ignored) {}
-                    result.put("error", "NAI 返回 HTTP " + status + (detail.isEmpty() ? "" : "：" + detail.substring(0, Math.min(500, detail.length()))));
+                    result.put("error", "NAI 返回 HTTP " + responseStatus + (detail.isEmpty() ? "" : "：" + detail.substring(0, Math.min(500, detail.length()))));
                 } else {
                     byte[] response = readBytesLimited(connection.getInputStream(), 30 * 1024 * 1024);
+                    responseBytesRead = response.length;
                     ArrayList<byte[]> images = extractNaiImages(response);
                     org.json.JSONArray urls = new org.json.JSONArray();
                     for (byte[] image : images) urls.put(saveNaiImage(image));
@@ -494,8 +493,15 @@ public class MainActivity extends Activity {
                 }
             } catch (Exception error) {
                 try {
-                    result.put("status", 0);
-                    result.put("error", error.getMessage() == null ? "NAI 网络请求失败" : error.getMessage());
+                    result.put("status", responseStatus);
+                    String message = error.getMessage() == null ? "NAI 网络请求失败" : error.getMessage();
+                    if (responseStatus >= 200 && responseStatus < 300) {
+                        message += "（HTTP " + responseStatus
+                                + "，Content-Type: " + responseContentType
+                                + "，Content-Length: " + declaredLength
+                                + "，已读取: " + responseBytesRead + " bytes）";
+                    }
+                    result.put("error", message);
                 } catch (Exception ignored) {}
             } finally {
                 if (connection != null) connection.disconnect();
