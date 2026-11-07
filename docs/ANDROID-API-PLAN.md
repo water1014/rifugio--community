@@ -61,8 +61,8 @@ The Android/Rifugio setup must support all three user-requested routes:
 - Added an Android WebView shell project under `android-shell/` with an HTTPS-only first-run server setup screen.
 - Added a GitHub Actions workflow that runs the API contract tests and builds a debug APK artifact.
 - Added custom request-header support to the shared chatroom/talk provider proxy, including safe header validation, reserved hop-by-hop header blocking, size limits, and case-insensitive overrides.
-- Added a custom-header field to the chatroom provider settings UI and included it in model discovery and chat requests.
-- Added an OpenCode Go provider preset. The legacy `https://opencode.ai/zen/go` base URL is normalized to the Go Chat Completions and model-list endpoints. The current documented `https://opencode.ai/inference/go/openai/v1` base URL is also supported.
+- Added custom-header fields to both chatroom and Talk provider settings UI and included them in model discovery and chat requests.
+- Added OpenCode Go selections in both chatroom and Talk provider settings. The legacy `https://opencode.ai/zen/go` base URL is normalized to the Go Chat Completions and model-list endpoints. The current documented `https://opencode.ai/inference/go/openai/v1` base URL is also supported.
 - Added automatic stable `x-opencode-session` and Rifugio `User-Agent` headers for OpenCode Go chat requests. The current namespace is derived from the configured chatroom/talk port and model; a future per-conversation identifier should replace it when the app exposes a stable conversation ID.
 - Added unit and proxy contract tests for custom headers and OpenCode Go routing.
 
