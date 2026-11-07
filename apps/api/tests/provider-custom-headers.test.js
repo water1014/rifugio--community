@@ -40,7 +40,7 @@ test('rejects malformed, unsafe, and oversized custom headers', () => {
   assert.throws(() => normalizeCustomHeaders('not-json'), /有效 JSON/);
   assert.throws(() => normalizeCustomHeaders([]), /JSON 对象/);
   assert.throws(() => normalizeCustomHeaders({ Host: 'attacker.example' }), /不允许覆盖安全请求头/);
-  assert.throws(() => normalizeCustomHeaders({ 'X-Test': 'first\\r\\nInjected: yes' }), /值无效/);
+  assert.throws(() => normalizeCustomHeaders({ 'X-Test': 'first\r\nInjected: yes' }), /值无效/);
   assert.throws(() => normalizeCustomHeaders(Object.fromEntries(
     Array.from({ length: 21 }, (_, i) => ['X-' + i, 'v'])
   )), /最多允许 20 项/);
