@@ -1438,11 +1438,12 @@ window.Rifugio.useTalk = function(ctx) {
             loadTalkMomentsFromServer();   // 动态也从 VPS 拉一次，localStorage 只做离线缓存
             // 锁屏在 PIN 校验拿到 cookie 后会派发这个事件 —— 那时再拉一次，
             // 修复「新设备首次打开时 mount 早于鉴权、GET 被 401、对话列表空着」的问题
-            window.addEventListener('refuge-authed', () => {
-                loadConvosFromDB();
+            window.addEventListener('refuge-authed', async () => {
+                await loadConvosFromDB();
                 loadTalkMomentsFromServer();
                 registerNidoNativePushToken();
                 registerNidoUnifiedPushSubscription();
+                await resumePendingNidoNotification();
             });
             const loadMoreTalkConvos = async () => {
                 if (talkVisibleConvoCount.value < talkSortedConvos.value.length) {
@@ -2338,7 +2339,18 @@ window.Rifugio.useTalk = function(ctx) {
                         }
                     } catch (_) {}
                 }
-                if (convo) selectTalk(id);
+                if (convo) {
+                    selectTalk(id);
+                    try { window.NidoNative?.clearPendingNotification?.(); } catch (_) {}
+                }
+            };
+            const resumePendingNidoNotification = async () => {
+                try {
+                    const raw = window.NidoNative?.getPendingNotification?.() || '';
+                    if (!raw) return;
+                    const detail = JSON.parse(raw);
+                    await handleNidoOpenConversation({ detail });
+                } catch (_) {}
             };
             onMounted(() => {
                 window.addEventListener('nido:push-token', handleNidoPushToken);
@@ -2346,6 +2358,7 @@ window.Rifugio.useTalk = function(ctx) {
                 window.addEventListener('nido:open-conversation', handleNidoOpenConversation);
                 registerNidoUnifiedPushSubscription();
                 registerNidoNativePushToken();
+                resumePendingNidoNotification();
                 const syncTalkMonitor = () => {
                     const c = activeConvo.value;
                     if (!c || talk.appView !== 'chats' || talk.chatView !== 'chat') return;
