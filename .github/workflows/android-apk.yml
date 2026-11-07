@@ -6,6 +6,9 @@ on:
       - feature/android-api-providers
     paths:
       - 'android-shell/**'
+      - 'apps/api/**'
+      - 'apps/web/index.html'
+      - 'apps/web/js/05-vue-app.js'
       - '.github/workflows/android-apk.yml'
 permissions:
   contents: read
