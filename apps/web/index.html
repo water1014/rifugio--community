@@ -2593,10 +2593,10 @@
                                 <div class="talk-settings-card img-preset-storage-card">
                                     <details class="img-preset-collapse">
                                     <summary><span>生图</span><em>{{ talkSettings.naiModel || '未选择模型' }} · 点开设置</em></summary>
-                                    <select v-model="talkSettings.imageProvider">
-                                        <option value="novelai">NovelAI</option>
-                                        <option value="openai-image">OpenAI Images</option>
-                                        <option value="custom-image">自定义生图接口</option>
+                                    <select v-model="talkSettings.imageProvider" :disabled="imageStudio.localMode">
+                                        <option value="novelai">NovelAI（NAI）</option>
+                                        <option v-if="!imageStudio.localMode" value="openai-image">OpenAI Images</option>
+                                        <option v-if="!imageStudio.localMode" value="custom-image">自定义生图接口</option>
                                     </select>
                                     <input v-model="talkSettings.imageBaseUrl" :placeholder="talkSettings.imageProvider === 'novelai' ? 'NovelAI 站点 Base URL（留空用官方 image.novelai.net）' : (talkSettings.imageProvider === 'custom-image' ? '兼容接口 Base URL，如 https://your-api.com' : 'Base URL（留空默认 https://api.openai.com）')">
                                     <input v-model="talkSettings.naiApiKey" type="password" :placeholder="talkSettings.imageProvider === 'novelai' ? 'NovelAI API Key' : 'API Key'">
@@ -2605,7 +2605,7 @@
                                             <option v-if="!NAI_IMAGE_MODELS.some(m => m.id === talkSettings.naiModel)" :value="talkSettings.naiModel">{{ talkSettings.naiModel }}</option>
                                             <option v-for="m in NAI_IMAGE_MODELS" :key="m.id" :value="m.id">{{ m.label }}</option>
                                         </select>
-                                        <button @click="fetchProviderModels('image')">拉取</button>
+                                        <button v-if="!imageStudio.localMode" @click="fetchProviderModels('image')">拉取</button>
                                     </div>
                                     <input v-model="talkSettings.naiModel" placeholder="自定义生图模型 ID">
                                     <select v-if="talkSettings.availableImageModels.length" v-model="talkSettings.naiModel">
@@ -2683,11 +2683,11 @@
                                     <textarea v-model="talkSettings.naiNegativePrompt" rows="3" placeholder="默认 Undesired Content / negative_prompt（下面预设组没填负向时，用这条兜底）"></textarea>
                                     <div class="talk-settings-inline">
                                         <button @click="testImageConnection">测试连接</button>
-                                        <button @click="saveImageServer">保存到服务器</button>
+                                        <button @click="saveImageServer">{{ imageStudio.localMode ? '保存到本机' : '保存到服务器' }}</button>
                                     </div>
                                     <p v-if="imageStudio.testStatus" class="talk-settings-note">{{ imageStudio.testStatus }}</p>
                                     <p v-if="imageStudio.saveStatus" class="talk-settings-note">{{ imageStudio.saveStatus }}</p>
-                                    <p class="talk-settings-note">key 和参数要「保存到服务器」后，聊天里我才能用 generate_image 出图。{{ imageStudio.hasKey ? '（已存 key '+imageStudio.keyHint+'）' : '（还没存 key）' }}</p>
+                                    <p class="talk-settings-note">{{ imageStudio.localMode ? 'Nido 安卓版直接连接 NovelAI，Key 使用 Android 加密存储，画师预设和参数保存在本机，不需要服务器。' : 'Key 和参数保存到服务器后，聊天里才能调用生图。' }}{{ imageStudio.hasKey ? '（已保存 Key '+imageStudio.keyHint+'）' : '（还没保存 Key）' }}</p>
                                     <p v-if="talkSettings.imageFetchStatus" class="talk-settings-note">{{ talkSettings.imageFetchStatus }}</p>
                                     </details>
                                 </div>
@@ -2722,7 +2722,7 @@
                                 <div class="talk-settings-card img-preset-storage-card">
                                     <details class="img-preset-collapse">
                                     <summary><span>测试生图</span><em>点开测试</em></summary>
-                                    <p class="talk-settings-note">先在上面点某个画师组的 ★。这里不要再选 preset，只输入动作 / 场景 / 镜头 / 姿势；后端会自动使用当前已激活的那一组。</p>
+                                    <p class="talk-settings-note">先在上面点某个画师组的 ★。这里不要再选 preset，只输入动作 / 场景 / 镜头 / 姿势；会自动使用当前激活的预设组。</p>
                                     <div class="talk-settings-inline" style="align-items:flex-start; gap:10px; flex-wrap:nowrap">
                                         <input v-model="imageStudio.testPrompt" style="flex:1; min-width:0" placeholder="例如：full body, walking, looking back, wind blowing hair, city night, dynamic pose">
                                         <button type="button" @click.prevent.stop="imageStudio.runTestGenerate()" :disabled="imageStudio.testGenerating || !imageStudio.runTestGenerate" style="white-space:nowrap; min-width:112px">{{ imageStudio.testGenerating ? '生成中…' : '🖼️ 生成' }}</button>
