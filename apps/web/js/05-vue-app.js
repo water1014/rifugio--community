@@ -1931,8 +1931,16 @@
                 pushRoomMessage('公告', text, 'system');
             };
             const onChatroomProviderChange = (port) => {
-                if (port.provider === 'opencode-go' && !port.base_url) port.base_url = 'https://opencode.ai/zen/go';
-                if (port.provider === 'deepseek' && !port.base_url) port.base_url = 'https://api.deepseek.com/v1';
+                const defaults = {
+                    openai:'https://api.openai.com/v1',
+                    opencode-go:'https://opencode.ai/zen/go',
+                    deepseek:'https://api.deepseek.com/v1',
+                    compatible:'https://api.openai.com/v1',
+                };
+                const knownDefaults = Object.values(defaults);
+                if (defaults[port.provider] && (!port.base_url || knownDefaults.includes(String(port.base_url).replace(/\/+$/, '')))) {
+                    port.base_url = defaults[port.provider];
+                }
                 saveChatroomPorts();
             };
             const fetchChatroomModels = async (port) => {
