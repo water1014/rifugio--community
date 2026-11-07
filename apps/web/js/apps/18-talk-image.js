@@ -490,6 +490,15 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
             const addImagePreset = async () => {
                 const d = imageStudio.draft;
                 if (!String(d.name || '').trim() && !String(d.prompt || '').trim()) { imageStudio.saveStatus = '预设至少要有名字或画师串'; return; }
+                if (imageStudio.localMode) {
+                    const id = window.crypto?.randomUUID?.() || ('nai-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+                    imageStudio.presets.push({ id, name:String(d.name || '未命名预设').slice(0,40), prompt:String(d.prompt || ''), negative:String(d.negative || ''), character:String(d.character || ''), lockCharacters:!!d.lockCharacters });
+                    if (!imageStudio.activePresetId) imageStudio.activePresetId = id;
+                    imageStudio.draft = { name:'', prompt:'', negative:'', character:'' };
+                    saveNidoImageConfig();
+                    imageStudio.saveStatus = '画师预设已保存到本机 ✓';
+                    return;
+                }
                 try {
                     const r = await fetch('/api/image/presets', { method:'POST', headers:{ 'Content-Type':'application/json' }, credentials:'include', body:JSON.stringify(d) });
                     const j = await r.json();
@@ -497,6 +506,11 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
                 } catch(e) { imageStudio.saveStatus = '保存失败：' + e.message; }
             };
             const updateImagePreset = async (p) => {
+                if (imageStudio.localMode) {
+                    saveNidoImageConfig();
+                    imageStudio.saveStatus = '已更新「' + p.name + '」';
+                    return;
+                }
                 try { await fetch('/api/image/presets/' + p.id, { method:'PUT', headers:{ 'Content-Type':'application/json' }, credentials:'include', body:JSON.stringify({ name:p.name, prompt:p.prompt, negative:p.negative, character:p.character, lockCharacters:!!p.lockCharacters }) }); imageStudio.saveStatus = '已更新「' + p.name + '」'; } catch(_) {}
             };
             // 边打字边存（防止还没失焦就去出图、后端拿到旧内容）
@@ -506,10 +520,20 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
                 presetSaveTimers[p.id] = setTimeout(() => updateImagePreset(p), 600);
             };
             const deleteImagePreset = async (p) => {
+                if (imageStudio.localMode) {
+                    imageStudio.presets = imageStudio.presets.filter(item => item.id !== p.id);
+                    if (imageStudio.activePresetId === p.id) imageStudio.activePresetId = imageStudio.presets[0]?.id || '';
+                    saveNidoImageConfig();
+                    return;
+                }
                 try { await fetch('/api/image/presets/' + p.id, { method:'DELETE', credentials:'include' }); await loadImageConfig(); } catch(_) {}
             };
             const setActivePreset = async (id) => {
                 imageStudio.activePresetId = id;
+                if (imageStudio.localMode) {
+                    saveNidoImageConfig();
+                    return;
+                }
                 try { await fetch('/api/image/config', { method:'PUT', headers:{ 'Content-Type':'application/json' }, credentials:'include', body:JSON.stringify({ activePresetId:id }) }); } catch(_) {}
             };
 
