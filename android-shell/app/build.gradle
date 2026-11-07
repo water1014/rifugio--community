@@ -1,0 +1,13 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'app.rifugio.shell'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'app.rifugio.shell'
+        minSdk 23
+        targetSdk 35
+        versionCode 1
+        versionName '0.1.0'
+    }
+}
