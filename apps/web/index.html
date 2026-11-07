@@ -1203,7 +1203,7 @@
             </div>
 
             <!-- ===================== LIBRERIA ===================== -->
-            <div v-if="mainTab === 'libreria'" key="libreria" class="px-8 pt-8">
+            <div v-else-if="mainTab === 'libreria'" key="libreria" class="px-8 pt-8">
                 <div class="legacy-subnav flex justify-center space-x-4 border-b border-gold/20 pb-2 mb-8 text-[10px] uppercase tracking-widest opacity-60">
                     <button @click="subTabs.libreria = 'posta'" :class="subTabs.libreria === 'posta' ? 'text-gold border-b border-gold pb-1' : ''">Mail</button>
                     <button @click="subTabs.libreria = 'diario'" :class="subTabs.libreria === 'diario' ? 'text-gold border-b border-gold pb-1' : ''">Diary</button>
@@ -3318,7 +3318,7 @@
             </div>
 
             <!-- ===================== HEALTH ===================== -->
-            <div v-if="mainTab === 'piani'" key="piani" class="px-8 pt-8 fade-enter-active">
+            <div v-else-if="mainTab === 'piani'" key="piani" class="px-8 pt-8 fade-enter-active">
                 <div class="text-[9px] uppercase tracking-widest text-stone-500 mb-6">Piani · 计划台账</div>
                 <div class="flex items-center mb-8 border-b border-red-900/30 pb-2">
                     <span class="text-red-900 mr-3">+</span>
