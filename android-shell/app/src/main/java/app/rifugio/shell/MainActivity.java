@@ -35,6 +35,14 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Context;
 import android.widget.Toast;
+import android.util.Base64;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
+import java.security.KeyStore;
 
 import androidx.core.content.ContextCompat;
 import androidx.webkit.WebViewAssetLoader;
@@ -50,6 +58,8 @@ import org.json.JSONObject;
 public class MainActivity extends Activity {
     private static final String PREFS = "nido_app";
     private static final String KEY_SERVER = "server_url";
+    private static final String SECRET_PREFS = "nido_encrypted_secrets";
+    private static final String SECRET_KEY_ALIAS = "nido_android_secret_key_v1";
     private static final String LOCAL_APP_URL = "https://appassets.androidplatform.net/index.html";
     static final String ACTION_PUSH_TOKEN_REFRESHED = "app.rifugio.shell.PUSH_TOKEN_REFRESHED";
     static final String ACTION_UNIFIED_PUSH_UPDATED = "app.rifugio.shell.UNIFIED_PUSH_UPDATED";
@@ -302,7 +312,70 @@ public class MainActivity extends Activity {
         });
     }
 
+    private SecretKey getOrCreateSecretKey() throws Exception {
+        KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
+        keyStore.load(null);
+        if (keyStore.containsAlias(SECRET_KEY_ALIAS)) {
+            return (SecretKey) keyStore.getKey(SECRET_KEY_ALIAS, null);
+        }
+        KeyGenerator generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
+        generator.init(new KeyGenParameterSpec.Builder(SECRET_KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setRandomizedEncryptionRequired(true)
+                .build());
+        return generator.generateKey();
+    }
+
+    private boolean validSecretName(String name) {
+        return name != null && name.matches("[a-zA-Z0-9_.-]{1,64}");
+    }
+
+    private String readEncryptedSecret(String name) {
+        if (!validSecretName(name)) return "";
+        try {
+            String packed = getSharedPreferences(SECRET_PREFS, MODE_PRIVATE).getString(name, "");
+            int split = packed.indexOf(':');
+            if (split <= 0) return "";
+            byte[] iv = Base64.decode(packed.substring(0, split), Base64.NO_WRAP);
+            byte[] ciphertext = Base64.decode(packed.substring(split + 1), Base64.NO_WRAP);
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE, getOrCreateSecretKey(), new GCMParameterSpec(128, iv));
+            return new String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8);
+        } catch (Exception error) {
+            android.util.Log.w("NidoSecret", "Could not decrypt local setting: " + name);
+            return "";
+        }
+    }
+
+    private boolean writeEncryptedSecret(String name, String value) {
+        if (!validSecretName(name) || value == null || value.length() > 8192) return false;
+        if (value.isEmpty()) {
+            getSharedPreferences(SECRET_PREFS, MODE_PRIVATE).edit().remove(name).apply();
+            return true;
+        }
+        try {
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.ENCRYPT_MODE, getOrCreateSecretKey());
+            byte[] encrypted = cipher.doFinal(value.getBytes(StandardCharsets.UTF_8));
+            String packed = Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP)
+                    + ":" + Base64.encodeToString(encrypted, Base64.NO_WRAP);
+            getSharedPreferences(SECRET_PREFS, MODE_PRIVATE).edit().putString(name, packed).apply();
+            return true;
+        } catch (Exception error) {
+            android.util.Log.e("NidoSecret", "Could not encrypt local setting: " + name);
+            return false;
+        }
+    }
+
     private final class NidoBridge {
+        @JavascriptInterface public String getSecret(String name) {
+            return readEncryptedSecret(name);
+        }
+        @JavascriptInterface public boolean setSecret(String name, String value) {
+            return writeEncryptedSecret(name, value);
+        }
         @JavascriptInterface public void postJson(String requestId, String rawUrl, String rawHeaders, String body) {
             final String id = requestId == null ? "" : requestId.substring(0, Math.min(80, requestId.length()));
             httpExecutor.execute(() -> {
