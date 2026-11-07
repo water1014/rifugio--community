@@ -121,7 +121,7 @@ test('all OpenAI-compatible community proxies keep Bearer auth server-side', { c
   for (const prefix of ['/api/chatroom-api/v1', '/api/talk-api/v1']) {
     response = await originalFetch(local.url + prefix + '/models', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ provider: 'openai', base_url: 'https://api.openai.com/v1', api_key: expectedKey }),
+      body: JSON.stringify({ provider: 'openai', base_url: 'https://api.openai.com/v1', api_key: expectedKey, custom_headers: { 'X-Client-Tag': 'rifugio-contract' } }),
     });
     assert.equal(response.status, 200, prefix + '/models');
     assert.equal((await response.json()).data[0].id, 'gpt-contract');
