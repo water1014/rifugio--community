@@ -7,8 +7,7 @@ on:
     paths:
       - 'android-shell/**'
       - 'apps/api/**'
-      - 'apps/web/index.html'
-      - 'apps/web/js/05-vue-app.js'
+      - 'apps/web/**'
       - '.github/workflows/android-apk.yml'
 permissions:
   contents: read
@@ -39,6 +38,8 @@ jobs:
         run: npm ci --prefix apps/api --registry=https://registry.npmjs.org --replace-registry-host=always
       - name: Run API contract tests
         run: npm test --prefix apps/api
+      - name: Run web tests
+        run: npm run test:web
       - name: Build debug APK
         working-directory: android-shell
         run: gradle --no-daemon assembleDebug
