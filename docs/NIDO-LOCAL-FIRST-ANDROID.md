@@ -93,3 +93,5 @@ These features may later be offered as optional add-ons, but the app must remain
 - Local Android mode no longer fetches or pushes Talk conversation lists, message history, or moments to the old server endpoints. Full conversation snapshots are additionally persisted in IndexedDB; localStorage remains a small fast-recovery snapshot.
 - JavaScript syntax checks passed for the changed Talk modules. The GitHub Actions APK build for the latest commit is still running; native compilation and packaging are not yet confirmed.
 - Model discovery, image generation, TTS, proactive scheduling, and all other server-dependent modules still need separate local implementations. The app is not yet a complete backend-free release.
+
+- Added native HTTPS GET support and routed Talk's text-model discovery directly to the configured provider's `/models` endpoint. TTS and image model discovery remain server-dependent and are intentionally marked unavailable in local mode rather than silently calling the removed backend.
