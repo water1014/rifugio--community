@@ -173,6 +173,7 @@ test('standalone Nido moments and AI stickers stay on-device', () => {
   assert.match(moments, /if \(!window\.NidoNative\) \{[\s\S]*?fetch\('\/api\/talk\/moments/);
   assert.match(stickers, /NIDO_LOCAL_AI_STICKERS_KEY = 'nido-local-ai-stickers-v1'/);
   assert.match(stickers, /const persistLocalAiStickers = \(\) =>/);
+  assert.match(stickers, /category:String\(s\.category \|\| '未分类'\)/);
   assert.match(stickers, /if \(window\.NidoNative\) \{[\s\S]*?persistLocalAiStickers\(\)/);
   assert.match(stickers, /if \(window\.NidoNative\) \{ persistLocalAiStickers\(\); return; \}/);
 });
