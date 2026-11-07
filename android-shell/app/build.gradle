@@ -11,3 +11,8 @@ android {
         versionName '0.1.0'
     }
 }
+
+dependencies {
+    // Firebase Messaging is optional at runtime until a project-specific google-services.json is added.
+    implementation 'com.google.firebase:firebase-messaging:24.1.0'
+}
