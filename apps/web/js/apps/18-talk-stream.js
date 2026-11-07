@@ -194,7 +194,7 @@ window.Rifugio.useTalkStream = function(ctx) {
             });
 
             const talkAutoRelayText = Vue.computed(() => {
-                if (talkUsesApi()) return 'API 大脑（Claude 已断开）';
+                if (talkUsesApi()) return 'API 大脑（独立 API 通道）';
                 if (talkSettings.executionMode === 'terminal') {
                     const s = talk.terminalRelayState || {};
                     if (s.relay_pending) return '接力中';
