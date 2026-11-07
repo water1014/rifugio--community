@@ -131,8 +131,8 @@ function withOpenCodeSession(customHeaders, endpoint, namespace, model) {
         .update([namespace || 'rifugio', model || ''].join('\\0'))
         .digest('hex').slice(0, 24);
       headers['x-opencode-session'] = 'ses_' + digest;
-    if (!Object.keys(headers).some(name => name.toLowerCase() === 'user-agent')) headers['User-Agent'] = 'Rifugio/0.1.0';
     }
+    if (!Object.keys(headers).some(name => name.toLowerCase() === 'user-agent')) headers['User-Agent'] = 'Rifugio/0.1.0';
   }
   return headers;
 }
