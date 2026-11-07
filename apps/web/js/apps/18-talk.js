@@ -722,7 +722,8 @@ window.Rifugio.useTalk = function(ctx) {
                         });
                         data = await res.json().catch(() => ({}));
                     }
-                    if (!res.ok || data.ok === false) throw new Error(data.error?.message || data.error || res.nativeError || ('HTTP ' + res.status));
+                    if (!data.error && res.nativeError) data.error = res.nativeError;
+                    if (!res.ok || data.ok === false) throw new Error(data.error?.message || data.error || ('HTTP ' + res.status));
                     if (kind === 'tts' && (requestId !== ttsFetchRequestId || providerAtStart !== normalizeTtsProvider(talkSettings.ttsProvider))) return;
                     const models = isTextModels
                         ? (Array.isArray(data.data) ? data.data : (data.models || []))
