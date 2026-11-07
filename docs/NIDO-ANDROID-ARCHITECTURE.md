@@ -14,7 +14,7 @@ Status: implementation plan for the real Android product. The current Android sh
 
 Core AI features must use an explicit provider configuration rather than silently falling back to Claude:
 
-1. OpenCode Go subscription: OpenAI-compatible chat-completions route for compatible models, canonical Go base URL `https://opencode.ai/inference/go/openai/v1`, and stable `x-opencode-session` on every request. Go model-list endpoint is `https://opencode.ai/inference/go/v1/models`.
+1. OpenCode Go subscription: the preferred base URL is `https://opencode.ai/zen/go`, with `/v1/chat/completions` and `/v1/models` routes plus a stable `x-opencode-session`. The legacy `/inference/go/openai/v1` route is also normalized for compatibility.
 2. DeepSeek official API: `https://api.deepseek.com/v1` where the selected model supports chat completions.
 3. Generic OpenAI-compatible API: editable HTTPS base URL, model, credential, and custom headers.
 
@@ -22,7 +22,7 @@ Provider coverage must be audited separately for ordinary chat, Talk, proactive 
 
 ## Proactive messages and Android notifications
 
-The existing server already runs a background proactive scheduler and can send browser Web Push. The active-message generation path has now been changed to call the selected API provider directly, using encrypted server-side credentials and the current conversation context. This implementation is committed on the feature branch but remains subject to CI and integration testing.
+The existing server already runs a background proactive scheduler and can send browser Web Push. The active-message generation path now calls the selected API provider directly, using encrypted server-side credentials and the current conversation context. Talk defaults to API execution; legacy Claude Terminal execution preferences are migrated to the API path.
 
 The current Web Push subscription is a browser Service Worker subscription. It is not sufficient evidence that notifications will work in the Android WebView app after the app process is killed.
 
@@ -59,13 +59,16 @@ FCM needs an app-specific Firebase project configuration and server-side credent
 - Tests now cover OpenCode Go proactive request routing, conversation context, session headers, and encrypted/masked provider credentials. CI still needs to pass before this change is considered verified.
 - `apps/api/modules/push-routes.js` currently stores Web Push subscriptions and sends VAPID notifications.
 - The Talk UI currently asks for browser Notification permission and subscribes a Service Worker. Android native push needs a separate token-registration and delivery path.
-- The current Android shell asks the user to enter an HTTPS server URL. That setup screen is explicitly temporary and must be removed from the final product.
+- Memory merge/model discovery and pet AI now use the shared provider helpers, with OpenCode Go, DeepSeek, generic compatible endpoints, custom headers, and encrypted server-side credentials.
+- Web Push subscription endpoints/keys and the VAPID private key are encrypted at rest. Registration requires owner authentication and validates public HTTPS endpoints to block private-network SSRF.
+- The current Android shell still asks the user to enter an HTTPS server URL. That setup screen is explicitly temporary and must be removed from the final product.
+- The latest successful debug build at commit `a8b3f88138ae762c280f27fcc8a82b9a629eafc9` produced a GitHub Actions artifact. That is a development build only; native notification delivery has not yet been verified on a physical phone.
 
 ## Delivery gates
 
-1. Finish the API-provider audit and make CI green; the Talk default and proactive-generation path have been moved to API mode, with tests added but not yet verified by a successful run.
-2. Complete the remaining Claude-dependency audit across memory, pet AI, image/vision, voice, and any terminal-only features.
-3. Implement native Android push registration, backend delivery, notification channels, and conversation deep-link routing.
-4. Bundle the frontend, configure the backend endpoint without a user-facing URL prompt, and preserve local data.
-5. Configure Firebase project credentials outside the repository and verify native push delivery.
-6. Build a signed release APK, test install/upgrade, and verify push while foregrounded, backgrounded, and after process termination on a physical Android device.
+1. Finish the remaining API-provider audit for image/vision, voice, and any terminal-only features; Talk, proactive generation, memory merge, and pet AI now have API-backed paths.
+2. Deploy the API backend with persistent storage and configure one stable backend origin for the release build; remove the first-run server URL form.
+3. Bundle the frontend where practical, preserve local data, and verify non-destructive upgrade migrations.
+4. Configure a compatible UnifiedPush distributor for devices without Google Play services; configure Firebase only if the optional FCM route is wanted.
+5. Test notification delivery and conversation deep links while foregrounded, backgrounded, locked, and after process termination on a physical Android device.
+6. Create a stable release signing key, store it securely in CI, build a signed release APK, and test install/upgrade without data loss.
