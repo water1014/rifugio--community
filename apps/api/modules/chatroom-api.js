@@ -114,7 +114,7 @@ function normalizeCustomHeaders(value) {
     const headerValue = String(rawValue == null ? '' : rawValue).trim();
     if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name)) throw new Error('自定义请求头名称无效');
     if (blocked.has(name.toLowerCase())) throw new Error('不允许覆盖安全请求头：' + name);
-    if (!headerValue || headerValue.length > 4096 || /[\\r\\n]/.test(headerValue)) throw new Error('自定义请求头值无效：' + name);
+    if (!headerValue || headerValue.length > 4096 || /[\r\n]/.test(headerValue)) throw new Error('自定义请求头值无效：' + name);
     headers[name] = headerValue;
   }
   return headers;
