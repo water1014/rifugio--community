@@ -105,17 +105,21 @@ window.Rifugio.useTalkMoments = function(ctx) {
                 talk.momentText = '';
                 talk.momentImages.splice(0);
                 talk.momentComposerOpen = false;
-                try {
-                    const r = await fetch('/api/talk/moments', {
-                        method:'POST', credentials:'include', headers:{ 'Content-Type':'application/json' },
-                        body:JSON.stringify(moment),
-                    });
-                    const j = await r.json().catch(() => ({}));
-                    if (!r.ok || j.ok === false) throw new Error(j.error || ('HTTP ' + r.status));
-                    try { writeTalkMomentsLocal(); } catch(_) {}
-                } catch (e) {
-                    talk.error = '动态还没单独存到 VPS：' + (e.message || 'unknown');
-                    await saveTalkMoments({ immediate:true });
+                if (window.NidoNative) {
+                    try { writeTalkMomentsLocal(); } catch(error) { talk.error = '动态本地保存失败：' + (error?.message || error); }
+                } else {
+                    try {
+                        const r = await fetch('/api/talk/moments', {
+                            method:'POST', credentials:'include', headers:{ 'Content-Type':'application/json' },
+                            body:JSON.stringify(moment),
+                        });
+                        const j = await r.json().catch(() => ({}));
+                        if (!r.ok || j.ok === false) throw new Error(j.error || ('HTTP ' + r.status));
+                        try { writeTalkMomentsLocal(); } catch(_) {}
+                    } catch (e) {
+                        talk.error = '动态还没单独存到 VPS：' + (e.message || 'unknown');
+                        await saveTalkMoments({ immediate:true });
+                    }
                 }
                 const notification = `系统：用户发了一条新动态（id=${moment.id}）`;
                 const prompt = `${notification}\n${momentCommentInstruction}`;
@@ -127,12 +131,14 @@ window.Rifugio.useTalkMoments = function(ctx) {
                 const i = talk.moments.findIndex(m => m.id === id);
                 if (i >= 0) talk.moments.splice(i, 1);
                 try { writeTalkMomentsLocal(); } catch(e) {}
-                try {
-                    const r = await fetch('/api/talk/moments/' + encodeURIComponent(id), { method:'DELETE', credentials:'include' });
-                    if (!r.ok) throw new Error('HTTP ' + r.status);
-                } catch (e) {
-                    talk.error = '动态删除还没同步到 VPS：' + (e.message || 'unknown');
-                    await saveTalkMoments({ immediate:true });
+                if (!window.NidoNative) {
+                    try {
+                        const r = await fetch('/api/talk/moments/' + encodeURIComponent(id), { method:'DELETE', credentials:'include' });
+                        if (!r.ok) throw new Error('HTTP ' + r.status);
+                    } catch (e) {
+                        talk.error = '动态删除还没同步到 VPS：' + (e.message || 'unknown');
+                        await saveTalkMoments({ immediate:true });
+                    }
                 }
             };
 
@@ -166,17 +172,21 @@ window.Rifugio.useTalkMoments = function(ctx) {
                 moment.replyTargetId = '';
                 moment.replyToAi = false;
                 moment.updatedAt = new Date().toISOString();
-                try {
-                    const r = await fetch('/api/talk/moments/' + encodeURIComponent(moment.id) + '/comments', {
-                        method:'POST', credentials:'include', headers:{ 'Content-Type':'application/json' },
-                        body:JSON.stringify({ id:comment.id, content:text, author:comment.author, avatar:comment.avatar, parent_comment_id:parentCommentId }),
-                    });
-                    const j = await r.json().catch(() => ({}));
-                    if (!r.ok || j.ok === false) throw new Error(j.error || ('HTTP ' + r.status));
-                    try { writeTalkMomentsLocal(); } catch(_) {}
-                } catch (e) {
-                    talk.error = '评论还没单独存到 VPS：' + (e.message || 'unknown');
-                    await saveTalkMoments({ immediate:true });
+                if (window.NidoNative) {
+                    try { writeTalkMomentsLocal(); } catch(error) { talk.error = '评论本地保存失败：' + (error?.message || error); }
+                } else {
+                    try {
+                        const r = await fetch('/api/talk/moments/' + encodeURIComponent(moment.id) + '/comments', {
+                            method:'POST', credentials:'include', headers:{ 'Content-Type':'application/json' },
+                            body:JSON.stringify({ id:comment.id, content:text, author:comment.author, avatar:comment.avatar, parent_comment_id:parentCommentId }),
+                        });
+                        const j = await r.json().catch(() => ({}));
+                        if (!r.ok || j.ok === false) throw new Error(j.error || ('HTTP ' + r.status));
+                        try { writeTalkMomentsLocal(); } catch(_) {}
+                    } catch (e) {
+                        talk.error = '评论还没单独存到 VPS：' + (e.message || 'unknown');
+                        await saveTalkMoments({ immediate:true });
+                    }
                 }
                 if (!askClaude) return;
                 const notification = target
