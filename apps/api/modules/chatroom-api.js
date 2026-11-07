@@ -310,11 +310,7 @@ async function runAnthropic({ provider, endpoint, apiKey, customHeaders, model, 
     if (toolDefs.length) { body.tools = toolDefs; body.tool_choice = { type: 'auto' }; }
     last = await fetchJson(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
+      headers: providerRequestHeaders(apiKey, customHeaders, provider),
       body: JSON.stringify(body),
     });
     const blocks = Array.isArray(last.content) ? last.content : [];
@@ -376,9 +372,7 @@ function mountProviderApiRoutes(app, options = {}) {
       const provider = providerFor(body.provider, baseUrl, body.model);
       const checked = await validatePublicBaseUrl(baseUrl);
       const endpoint = modelsEndpointFor(checked.toString().replace(/\/$/, ''));
-      const headers = provider === 'anthropic'
-        ? { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }
-        : { Authorization: `Bearer ${apiKey}` };
+      const headers = providerRequestHeaders(apiKey, body.custom_headers, provider);
       const upstream = await fetchJson(endpoint, { headers });
       const data = (upstream.data || upstream.models || []).map(item => ({
         id: item && (item.id || item.name || item.model), object: 'model',
@@ -405,6 +399,7 @@ function mountProviderApiRoutes(app, options = {}) {
       if (!apiKey || !model || !baseUrl) throw new Error('base_url / api_key / model 必填');
       if (!Array.isArray(body.messages) || !body.messages.length) throw new Error('messages required');
       const provider = providerFor(body.provider, baseUrl, model);
+      const customHeaders = normalizeCustomHeaders(body.custom_headers);
       auditProvider = provider;
       auditModel = model;
       const checked = await validatePublicBaseUrl(baseUrl);
@@ -467,6 +462,8 @@ module.exports = {
   mountProviderApiRoutes,
   providerFor,
   normalizeApiKey,
+  normalizeCustomHeaders,
+  providerRequestHeaders,
   endpointFor,
   modelsEndpointFor,
   cacheUsage,
