@@ -950,9 +950,7 @@ window.Rifugio.useTalkStream = function(ctx) {
                         nativeError:String(envelope.error || ''),
                         imageUrl:String(envelope.imageUrl || ''),
                         imageUrls:Array.isArray(envelope.imageUrls) ? envelope.imageUrls.map(value => String(value || '')).filter(value => value.startsWith('https://appassets.androidplatform.net/nido-images/')) : (envelope.imageUrl ? [String(envelope.imageUrl)] : []),
-                        // NAI returns ZIP/binary images decoded by the native layer, not a JSON body.
-                        imageDataUrl:String(envelope.imageDataUrl || ''),
-                        imageDataUrls:Array.isArray(envelope.imageDataUrls) ? envelope.imageDataUrls.map(value => String(value || '')).filter(value => value.startsWith('data:image/')) : (envelope.imageDataUrl ? [String(envelope.imageDataUrl)] : []),
+                        // NAI ZIP images are persisted in app-private storage and returned as small local URLs.
                     });
                 } catch (error) {
                     pending.reject(new Error('Android 网络桥返回了无法识别的数据'));
