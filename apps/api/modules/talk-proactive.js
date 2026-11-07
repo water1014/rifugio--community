@@ -1,6 +1,14 @@
 const crypto = require('crypto');
 const Database = require('./sqlite');
-const { spawn } = require('child_process');
+const {
+  providerFor,
+  normalizeApiKey,
+  withOpenCodeSession,
+  validatePublicBaseUrl,
+  endpointFor,
+  runOpenAiCompatible,
+  runAnthropic,
+} = require('./chatroom-api');
 
 function createTalkProactive(ctx = {}) {
   const {
@@ -9,9 +17,10 @@ function createTalkProactive(ctx = {}) {
     writeJsonSetting,
     sanitizeTalkMessages,
     sendWebPushNotification,
+    encrypt,
+    decrypt,
+    maskKey,
   } = ctx;
-  const RIFUGIO_INTERNAL_TOKEN = process.env.RIFUGIO_INTERNAL_TOKEN || '';
-  const TERMINAL_CHAT_INTERNAL_BASE = process.env.RIFUGIO_INTERNAL_BASE_URL || 'http://127.0.0.1:3457';
 
   const TALK_PROACTIVE_SETTINGS_KEY = 'talk_proactive_settings';
   const TALK_PROACTIVE_ACTIVITY_KEY = 'talk_proactive_activity';
@@ -43,6 +52,13 @@ function createTalkProactive(ctx = {}) {
       prompt: String(input.prompt || input.proactivePrompt || '').trim().slice(0, 600),
       barkUrl: String(input.barkUrl || '').trim().slice(0, 1000),
       conversationId: String(input.conversationId || input.conversation_id || '').trim().slice(0, 120),
+      provider: String(input.provider || input.apiProtocol || 'opencode-go').trim().toLowerCase().slice(0, 40),
+      baseUrl: String(input.baseUrl || input.base_url || 'https://opencode.ai/zen/go').trim().slice(0, 1000),
+      apiModel: String(input.apiModel || input.api_model || input.model || '').trim().slice(0, 120),
+      apiKey: String(input.apiKey || input.api_key || '').trim().slice(0, 4096),
+      customHeaders: typeof (input.customHeaders ?? input.custom_headers) === 'string'
+        ? String(input.customHeaders ?? input.custom_headers).slice(0, 12000)
+        : JSON.stringify(input.customHeaders ?? input.custom_headers ?? {}),
       model: String(input.model || 'default').trim().slice(0, 80),
       effort: String(input.effort || 'medium').trim().slice(0, 20),
       systemPrompt: String(input.systemPrompt || input.system_prompt || '').trim().slice(0, 20000),
@@ -52,11 +68,32 @@ function createTalkProactive(ctx = {}) {
   }
 
   function readTalkProactiveSettings() {
-    return normalizeTalkProactiveSettings(readJsonSetting(TALK_PROACTIVE_SETTINGS_KEY, {}));
+    const stored = readJsonSetting(TALK_PROACTIVE_SETTINGS_KEY, {});
+    const settings = normalizeTalkProactiveSettings(stored);
+    if (stored.apiKeyEnc && typeof decrypt === 'function') {
+      try { settings.apiKey = decrypt(stored.apiKeyEnc); } catch (_) { settings.apiKey = ''; }
+    }
+    return settings;
   }
 
-  function writeTalkProactiveSettings(settings) {
-    writeJsonSetting(TALK_PROACTIVE_SETTINGS_KEY, normalizeTalkProactiveSettings(settings));
+  function writeTalkProactiveSettings(input) {
+    const previous = readJsonSetting(TALK_PROACTIVE_SETTINGS_KEY, {});
+    const settings = normalizeTalkProactiveSettings(input);
+    const incomingKey = String(input.apiKey || input.api_key || '').trim();
+    const stored = { ...settings };
+    delete stored.apiKey;
+    if (incomingKey && !incomingKey.includes('***') && typeof encrypt === 'function') {
+      stored.apiKeyEnc = encrypt(incomingKey);
+    } else if (previous.apiKeyEnc) {
+      stored.apiKeyEnc = previous.apiKeyEnc;
+    }
+    writeJsonSetting(TALK_PROACTIVE_SETTINGS_KEY, stored);
+  }
+
+  function publicTalkProactiveSettings() {
+    const settings = readTalkProactiveSettings();
+    const apiKey = settings.apiKey;
+    return { ...settings, apiKey: apiKey ? (typeof maskKey === 'function' ? maskKey(apiKey) : '已配置') : '' };
   }
 
   function readTalkActivity() {
@@ -285,48 +322,64 @@ function createTalkProactive(ctx = {}) {
     return { text, bark: directive };
   }
 
-  // 主动消息必须是"正在跟她聊天的那个 session"，不能另开一个 claude 进程自己攒上下文——
-  // 真实聊天在 terminal-chat.js 的 tmux 交互式 claude 里，那边不认 --session-id/--resume。
-  // 唯一办法是内部回环调用 /api/terminal-chat/send，把提示文字当成一条"用户消息" paste
-  // 进同一个 tmux pane，走它原有的整套收口逻辑。回环鉴权见 auth-passkey.js 的
-  // isInternalProactiveRequest（socket 必须是 127.0.0.1/::1 + x-rifugio-internal token）。
-  async function sendProactiveIntoTerminalChat(prompt, opts = {}) {
-    if (!RIFUGIO_INTERNAL_TOKEN) throw new Error('RIFUGIO_INTERNAL_TOKEN 未配置，无法回环调用 terminal-chat');
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 120000);
-    try {
-      const res = await fetch(`${TERMINAL_CHAT_INTERNAL_BASE}/api/terminal-chat/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-rifugio-internal': RIFUGIO_INTERNAL_TOKEN },
-        body: JSON.stringify({
-          prompt,
-          conversation_id: opts.conversationId || 'talk-proactive',
-          model: opts.model || 'default',
-          effort: opts.effort || 'medium',
-          system_prompt: opts.systemPrompt || '',
-          character_prompt: opts.characterPrompt || '',
-          bootstrap_context: '',
-          force_relay: false,
-          images: [],
-        }),
-        signal: controller.signal,
-      });
-      const text = await res.text();
-      if (!res.ok) throw new Error(`terminal-chat/send ${res.status}: ${text.slice(0, 300)}`);
-      let finalText = '';
-      for (const line of text.split('\n')) {
-        if (!line.startsWith('data: ')) continue;
-        const payload = line.slice(6).trim();
-        if (!payload || payload === '[DONE]') continue;
-        let ev;
-        try { ev = JSON.parse(payload); } catch (_) { continue; }
-        if (ev.type === 'terminal_final') finalText = String(ev.text || '');
-        if (ev.type === 'error') throw new Error(ev.error || 'terminal-chat error');
-      }
-      return finalText;
-    } finally {
-      clearTimeout(timer);
+  function proactiveMessageContent(message) {
+    const content = message && (message.content ?? message.text);
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+      return content.map(part => {
+        if (typeof part === 'string') return part;
+        if (part && ['text', 'input_text'].includes(part.type)) return part.text || '';
+        if (part && part.type === 'image_url') return '[图片]';
+        return '';
+      }).filter(Boolean).join('\n');
     }
+    return '';
+  }
+
+  async function generateProactiveReply(settings, convo, prompt) {
+    const apiKey = normalizeApiKey(settings.apiKey);
+    const baseUrl = String(settings.baseUrl || '').trim();
+    const model = String(settings.apiModel || '').trim();
+    if (!apiKey || !baseUrl || !model) {
+      throw new Error('主动消息需要先配置 API Key、Base URL 和模型；不会调用 Claude Terminal。');
+    }
+    const provider = providerFor(settings.provider, baseUrl, model);
+    const checked = await validatePublicBaseUrl(baseUrl);
+    const endpoint = endpointFor(checked.toString().replace(/\/$/, ''), provider);
+    const customHeaders = withOpenCodeSession(
+      settings.customHeaders,
+      endpoint,
+      'talk-proactive:' + String(convo && convo.id || 'default'),
+      model,
+    );
+    const history = (Array.isArray(convo && convo.messages) ? convo.messages : [])
+      .slice(-24)
+      .filter(message => message && ['user', 'assistant'].includes(message.role))
+      .map(message => ({ role: message.role, content: proactiveMessageContent(message) }))
+      .filter(message => message.content);
+    const messages = [
+      ...(settings.systemPrompt ? [{ role: 'system', content: settings.systemPrompt }] : []),
+      ...(settings.characterPrompt ? [{ role: 'system', content: settings.characterPrompt }] : []),
+      ...history,
+      { role: 'user', content: prompt },
+    ];
+    const input = {
+      provider,
+      endpoint,
+      apiKey,
+      customHeaders,
+      model,
+      messages,
+      temperature: 0.85,
+      tools: [],
+      namespace: 'talk-proactive:' + String(convo && convo.id || 'default'),
+      requestId: crypto.randomUUID(),
+      routeName: 'talk-proactive',
+    };
+    const result = provider === 'anthropic'
+      ? await runAnthropic(input)
+      : await runOpenAiCompatible(input);
+    return String(result.text || '').trim();
   }
 
   async function maybeRunTalkProactive() {
@@ -360,16 +413,10 @@ function createTalkProactive(ctx = {}) {
           'Bark URL 格式等价于：curl "https://api.day.app/key/Title/Content?icon=https://example.com/icon.png"。',
           '不要自己调用工具或 curl 发送 Bark，避免重复推送。你可以单独输出一行 [[bark:标题|正文]] 来自定义推送标题和正文；如果不输出，后端会用对话名和你的主动消息正文发送。不要把 Title/Content/title/content 当成真实内容。',
         ].join('\n') : 'Bark：用户没有提供 Bark URL，不要输出 bark 指令。',
-        '动态/朋友圈：你可以自行判断是否调用 post_pyq 发一条动态，不强制。想配图时先调用 generate_image，再把返回的相对图片链接传给 post_pyq；不要把动态全文重复发进聊天。',
+        '本次主动任务只负责生成一条聊天消息，不调用终端、Claude CLI 或外部工具。',
         settings.prompt ? `用户给你的主动消息风格补充：${settings.prompt}` : '',
       ].filter(Boolean).join('\n');
-      const rawContent = (await sendProactiveIntoTerminalChat(prompt, {
-        conversationId: convo.id,
-        model: settings.model,
-        effort: settings.effort,
-        systemPrompt: settings.systemPrompt,
-        characterPrompt: settings.characterPrompt,
-      })).trim() || '我刚刚想起你，来看看你在不在。';
+      const rawContent = (await generateProactiveReply(settings, convo, prompt)).trim() || '我刚刚想起你，来看看你在不在。';
       const barkDirective = extractTalkBarkDirective(rawContent);
       const content = barkDirective.text || '我刚刚想起你，来看看你在不在。';
       const msg = {
@@ -377,8 +424,8 @@ function createTalkProactive(ctx = {}) {
         role: 'assistant',
         content,
         time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }),
-        model: 'proactive',
-        engine: 'agent',
+        model: settings.apiModel || 'proactive',
+        engine: 'api',
         done: true,
         proactive: true,
       };
@@ -392,7 +439,7 @@ function createTalkProactive(ctx = {}) {
         conversationId: convo.id,
         nextDueAt: now + computeTalkProactiveDelayMs(settings),
       });
-      const title = convo.name || 'Claude';
+      const title = convo.name || 'Nido';
       const barkTitle = barkDirective.bark?.title || title;
       const barkBody = barkDirective.bark?.body || content.slice(0, 180) || '发来一条新消息';
       let barkResult = settings.barkUrl
@@ -419,14 +466,14 @@ function createTalkProactive(ctx = {}) {
 
   function mountTalkProactiveRoutes(app) {
     app.get('/api/talk/proactive/settings', (_req, res) => {
-      res.json({ ok: true, settings: readTalkProactiveSettings(), activity: readTalkActivity() });
+      res.json({ ok: true, settings: publicTalkProactiveSettings(), activity: readTalkActivity() });
     });
 
     app.put('/api/talk/proactive/settings', (req, res) => {
-      const settings = normalizeTalkProactiveSettings(req.body || {});
-      writeTalkProactiveSettings(settings);
+      writeTalkProactiveSettings(req.body || {});
+      const settings = readTalkProactiveSettings();
       const activity = settings.enabled ? ensureTalkProactiveDue(settings, readTalkActivity()) : readTalkActivity();
-      res.json({ ok: true, settings, activity });
+      res.json({ ok: true, settings: publicTalkProactiveSettings(), activity });
     });
 
     app.post('/api/talk/activity', (req, res) => {
@@ -476,6 +523,7 @@ function createTalkProactive(ctx = {}) {
     maybeRunTalkProactive,
     mountTalkProactiveRoutes,
     pushTalkProactiveEvent,
+    generateProactiveReply,
   };
 }
 
