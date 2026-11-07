@@ -2046,7 +2046,7 @@ window.Rifugio.useTalk = function(ctx) {
                         credentials:'include',
                         body:JSON.stringify({
                             title:talkProfile.claudeName || 'Companion',
-                            body:'这是一条 Rifugio PWA 系统通知测试。',
+                            body:'这是一条 Nido 系统通知测试。',
                         }),
                     });
                     const j = await r.json().catch(() => ({}));
