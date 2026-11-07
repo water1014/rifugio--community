@@ -143,10 +143,12 @@ public class NidoProactiveWorker extends Worker {
             if (endpoint.getHost().equalsIgnoreCase("opencode.ai")
                     || settings.optString("provider", "").toLowerCase(Locale.ROOT).contains("opencode")) {
                 SharedPreferences sessionPrefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-                String session = sessionPrefs.getString("opencode_session", "");
+                String conversationId = chat.optString("conversationId", "default").trim();
+                String sessionKey = "opencode_session_" + Integer.toHexString(conversationId.hashCode());
+                String session = sessionPrefs.getString(sessionKey, "");
                 if (session.isEmpty()) {
                     session = "ses_" + java.util.UUID.randomUUID().toString().replace("-", "");
-                    sessionPrefs.edit().putString("opencode_session", session).apply();
+                    sessionPrefs.edit().putString(sessionKey, session).apply();
                 }
                 if (customHeaderMissing(custom, "x-opencode-session")) connection.setRequestProperty("x-opencode-session", session);
             }
