@@ -948,8 +948,8 @@ window.Rifugio.useTalkStream = function(ctx) {
                         text:async () => body,
                         json:async () => JSON.parse(body || '{}'),
                         nativeError:String(envelope.error || ''),
-                        imageDataUrl:String(envelope.imageDataUrl || ''),
-                        imageDataUrls:Array.isArray(envelope.imageDataUrls) ? envelope.imageDataUrls.map(value => String(value || '')).filter(value => value.startsWith('data:image/')) : (envelope.imageDataUrl ? [String(envelope.imageDataUrl)] : []),
+                        imageUrl:String(envelope.imageUrl || ''),
+                        imageUrls:Array.isArray(envelope.imageUrls) ? envelope.imageUrls.map(value => String(value || '')).filter(value => value.startsWith('https://appassets.androidplatform.net/nido-images/')) : (envelope.imageUrl ? [String(envelope.imageUrl)] : []),
                     });
                 } catch (error) {
                     pending.reject(new Error('Android 网络桥返回了无法识别的数据'));
