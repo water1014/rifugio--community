@@ -1224,10 +1224,11 @@ window.Rifugio.useTalkStream = function(ctx) {
                                 finalResponse = j;
                                 break;
                             }
-                            messages.push({ role:'assistant', content:msg.content || null, tool_calls:calls });
+                            const selectedCalls = calls.slice(0, 2);
+                            messages.push({ role:'assistant', content:msg.content || null, tool_calls:selectedCalls });
                             assistantMsg.content = String(msg.content || '正在调用 NovelAI 绘制画面…').trim();
                             assistantMsg.preview = true;
-                            for (const call of calls.slice(0, 2)) {
+                            for (const call of selectedCalls) {
                                 const callId = String(call.id || ('nido-image-' + Date.now()));
                                 const name = String(call.function?.name || '');
                                 if (name !== 'nido_generate_image') {
