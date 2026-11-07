@@ -111,9 +111,10 @@ window.Rifugio.useCrabRoom = function(ctx) {
             chatOpen:false, chatBusy:false, chatInput:'', chatKeyboardOpen:false, chatViewportStyle:{ '--crab-chat-height':'100dvh', '--crab-chat-top':'0px' },
             chatMessages:Array.isArray(savedPetChat.messages) ? savedPetChat.messages.slice(-40) : [],
             ai:{
-                provider:'openai', base_url:'https://api.openai.com/v1', api_key:'', model:'gpt-4o-mini',
+                provider:'openai', base_url:'https://api.openai.com/v1', api_key:'', model:'gpt-4o-mini', custom_headers:'',
                 daily_diary:false, daily_hour:22, loading:false, saving:false, testing:false, status:'',
                 providers:[
+                    { id:'opencode-go', label:'OpenCode Go', base_url:'https://opencode.ai/zen/go', model:'' },
                     { id:'openai', label:'OpenAI', base_url:'https://api.openai.com/v1', model:'gpt-4o-mini' },
                     { id:'deepseek', label:'DeepSeek', base_url:'https://api.deepseek.com/v1', model:'deepseek-chat' },
                     { id:'glm', label:'GLM 智谱', base_url:'https://open.bigmodel.cn/api/paas/v4', model:'glm-4-flash' },
@@ -380,7 +381,7 @@ window.Rifugio.useCrabRoom = function(ctx) {
                 const payload = await response.json();
                 if (!response.ok || payload?.ok === false) throw new Error(payload?.error || ('HTTP ' + response.status));
                 const data = payload.data || {};
-                ['provider','base_url','api_key','model','daily_diary','daily_hour'].forEach(key => {
+                ['provider','base_url','api_key','model','custom_headers','daily_diary','daily_hour'].forEach(key => {
                     if (data[key] !== undefined && data[key] !== null) petUi.ai[key] = data[key];
                 });
                 petUi.ai.status = data.api_key ? '🔒 API Key 已在服务器加密保存' : '还没有配置养娃 API';
@@ -404,7 +405,8 @@ window.Rifugio.useCrabRoom = function(ctx) {
                     method:'PUT', credentials:'same-origin', headers:{ 'Content-Type':'application/json' },
                     body:JSON.stringify({
                         provider:petUi.ai.provider, base_url:petUi.ai.base_url, api_key:petUi.ai.api_key,
-                        model:petUi.ai.model, daily_diary:petUi.ai.daily_diary, daily_hour:petUi.ai.daily_hour,
+                        model:petUi.ai.model, custom_headers:petUi.ai.custom_headers,
+                        daily_diary:petUi.ai.daily_diary, daily_hour:petUi.ai.daily_hour,
                     }),
                 });
                 const payload = await response.json();
@@ -421,7 +423,7 @@ window.Rifugio.useCrabRoom = function(ctx) {
             try {
                 const response = await fetch('/api/settings/pet-ai/test', {
                     method:'POST', credentials:'same-origin', headers:{ 'Content-Type':'application/json' },
-                    body:JSON.stringify({ provider:petUi.ai.provider, base_url:petUi.ai.base_url, api_key:petUi.ai.api_key, model:petUi.ai.model }),
+                    body:JSON.stringify({ provider:petUi.ai.provider, base_url:petUi.ai.base_url, api_key:petUi.ai.api_key, model:petUi.ai.model, custom_headers:petUi.ai.custom_headers }),
                 });
                 const payload = await response.json();
                 if (!response.ok || payload?.ok === false) throw new Error(payload?.error || ('HTTP ' + response.status));
