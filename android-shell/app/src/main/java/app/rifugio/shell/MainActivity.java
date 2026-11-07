@@ -48,11 +48,19 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import androidx.core.content.ContextCompat;
 import androidx.webkit.WebViewAssetLoader;
+import androidx.work.Constraints;
+import androidx.work.ExistingPeriodicWorkPolicy;
+import androidx.work.NetworkType;
+import androidx.work.PeriodicWorkRequest;
+import androidx.work.WorkManager;
 
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.messaging.FirebaseMessaging;
@@ -198,6 +206,25 @@ public class MainActivity extends Activity {
         String script = "window.dispatchEvent(new CustomEvent('nido:push-subscription',{detail:"
                 + raw + "}));";
         webView.evaluateJavascript(script, null);
+    }
+
+    private void scheduleNidoProactiveWork(boolean enabled) {
+        WorkManager manager = WorkManager.getInstance(getApplicationContext());
+        if (!enabled) {
+            manager.cancelUniqueWork(NidoProactiveWorker.UNIQUE_WORK);
+            return;
+        }
+        Constraints constraints = new Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build();
+        PeriodicWorkRequest request = new PeriodicWorkRequest.Builder(
+                NidoProactiveWorker.class, 15, TimeUnit.MINUTES)
+                .setConstraints(constraints)
+                .build();
+        manager.enqueueUniquePeriodicWork(
+                NidoProactiveWorker.UNIQUE_WORK,
+                ExistingPeriodicWorkPolicy.UPDATE,
+                request);
     }
 
     private void requestNotificationPermission() {
@@ -656,6 +683,70 @@ public class MainActivity extends Activity {
         }
         @JavascriptInterface public void postNaiImage(String requestId, String rawUrl, String rawHeaders, String body) {
             enqueueNativeNaiImage(requestId, rawUrl, rawHeaders, body);
+        }
+        @JavascriptInterface public void configureProactive(String rawConfig) {
+            try {
+                JSONObject config = new JSONObject(rawConfig == null ? "{}" : rawConfig);
+                config.remove("apiKey");
+                SharedPreferences local = getSharedPreferences(NidoProactiveWorker.PREFS, MODE_PRIVATE);
+                local.edit()
+                        .putString(NidoProactiveWorker.KEY_CONFIG, config.toString())
+                        .putLong(NidoProactiveWorker.KEY_NEXT_DUE, 0)
+                        .apply();
+                scheduleNidoProactiveWork(config.optBoolean("enabled", false)
+                        && config.optBoolean("scriptEnabled", true));
+            } catch (Exception error) {
+                android.util.Log.e("NidoProactive", "Could not save local proactive settings", error);
+            }
+        }
+        @JavascriptInterface public void setProactiveContext(String rawContext) {
+            try {
+                JSONObject next = new JSONObject(rawContext == null ? "{}" : rawContext);
+                SharedPreferences local = getSharedPreferences(NidoProactiveWorker.PREFS, MODE_PRIVATE);
+                String previousRaw = local.getString(NidoProactiveWorker.KEY_CONTEXT, "{}");
+                JSONObject previous = new JSONObject(previousRaw);
+                long oldUserAt = previous.optLong("lastUserAt", 0);
+                long newUserAt = next.optLong("lastUserAt", 0);
+                String oldConversation = previous.optString("conversationId", "");
+                String newConversation = next.optString("conversationId", "");
+                SharedPreferences.Editor editor = local.edit().putString(NidoProactiveWorker.KEY_CONTEXT, next.toString());
+                if (newUserAt != oldUserAt || !newConversation.equals(oldConversation)) {
+                    editor.putLong(NidoProactiveWorker.KEY_NEXT_DUE, 0);
+                }
+                editor.apply();
+                JSONObject config = new JSONObject(local.getString(NidoProactiveWorker.KEY_CONFIG, "{}"));
+                if (config.optBoolean("enabled", false) && config.optBoolean("scriptEnabled", true)) {
+                    scheduleNidoProactiveWork(true);
+                }
+            } catch (Exception error) {
+                android.util.Log.w("NidoProactive", "Could not update local proactive context", error);
+            }
+        }
+        @JavascriptInterface public String takePendingProactiveMessages() {
+            SharedPreferences local = getSharedPreferences(NidoProactiveWorker.PREFS, MODE_PRIVATE);
+            String pending = local.getString(NidoProactiveWorker.KEY_PENDING, "[]");
+            local.edit().putString(NidoProactiveWorker.KEY_PENDING, "[]").apply();
+            return pending;
+        }
+        @JavascriptInterface public String getProactiveStatus() {
+            SharedPreferences local = getSharedPreferences(NidoProactiveWorker.PREFS, MODE_PRIVATE);
+            JSONObject status = new JSONObject();
+            try {
+                status.put("enabled", new JSONObject(local.getString(NidoProactiveWorker.KEY_CONFIG, "{}")).optBoolean("enabled", false));
+                status.put("nextDueAt", local.getLong(NidoProactiveWorker.KEY_NEXT_DUE, 0));
+                status.put("lastError", local.getString(NidoProactiveWorker.KEY_LAST_ERROR, ""));
+            } catch (Exception ignored) {}
+            return status.toString();
+        }
+        @JavascriptInterface public void requestLocalNotifications() {
+            runOnUiThread(() -> requestNotificationPermission());
+        }
+        @JavascriptInterface public void showLocalNotification(String title, String body, String conversationId) {
+            Map<String, String> data = new HashMap<>();
+            data.put("app", "nido");
+            data.put("conversationId", conversationId == null ? "" : conversationId);
+            data.put("messageId", String.valueOf(System.currentTimeMillis()));
+            NidoMessagingService.showNotification(MainActivity.this, title, body, data);
         }
         @JavascriptInterface public String getPushToken() {
             return getSharedPreferences(NidoMessagingService.PREFS, MODE_PRIVATE)
