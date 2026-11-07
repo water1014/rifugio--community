@@ -1931,6 +1931,7 @@
                 pushRoomMessage('公告', text, 'system');
             };
             const onChatroomProviderChange = (port) => {
+                port.model = '';
                 const defaults = {
                     openai:'https://api.openai.com/v1',
                     opencode-go:'https://opencode.ai/zen/go',
