@@ -64,7 +64,7 @@ assert.match(talkStream, /\['opencode-go', 'deepseek'\]\.includes\(talkSettings\
 assert.match(talk, /'\/api\/talk-api\/v1\/models'/, 'Talk model lookup must use the protocol-aware backend route');
 assert.match(talkStream, /provider:talkSettings\.apiProtocol === 'anthropic' \? 'anthropic' : \(\['opencode-go', 'deepseek'\]\.includes\(talkSettings\.apiProtocol\) \? talkSettings\.apiProtocol : 'compatible'\)/, 'Talk chat must preserve OpenCode Go and DeepSeek provider identifiers');
 assert.doesNotMatch(talkStream, /provider:'auto'/, 'Claude-named relay models must not silently switch to Anthropic auth');
-assert.match(index, /OpenAI 兼容（Bearer · \/chat\/completions）/, 'Talk settings must explain compatible relay authentication');
+assert.match(index, /OpenAI 兼容 \/ OpenCode Go（Bearer · \/chat\/completions）/, 'Talk settings must explain compatible relay authentication and OpenCode Go routing');
 assert.match(index, /Anthropic 原生（x-api-key · \/messages）/, 'Talk settings must keep native Anthropic as an explicit option');
 
 assert.ok(!radio.includes('api.qrserver.com'), 'NetEase login must use a real one-time QR session, not a homepage QR');
