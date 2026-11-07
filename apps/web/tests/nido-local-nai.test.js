@@ -30,7 +30,9 @@ test('NovelAI requests are sent from Android and ZIP images are extracted native
   assert.match(native, /@JavascriptInterface public void postNaiImage/);
   assert.match(native, /new ZipInputStream/);
   assert.match(native, /extractNaiImages/);
-  assert.match(native, /imageDataUrls/);
+  assert.match(native, /imageUrls/);
+  assert.match(native, /interceptNidoImage/);
+  assert.match(native, /nido-images/);
   assert.match(native, /只允许 HTTPS NAI 接口地址/);
   assert.match(native, /setInstanceFollowRedirects\(false\)/);
 });
