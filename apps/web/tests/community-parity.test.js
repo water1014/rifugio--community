@@ -75,6 +75,6 @@ assert.match(radio, /\/api\/radio\/netease\/account/, 'the UI must restore the c
 assert.match(radio, /\/api\/radio\/netease\/playlists/, 'the UI must load the user playlists');
 assert.match(radio, /logoutNetease/, 'the UI needs an explicit NetEase logout action');
 assert.ok(!index.includes('网易云、QQ 音乐、酷狗任选一家'), 'unsupported providers must not be presented as real login choices');
-assert.match(index, /登录凭证只加密保存在你的 Rifugio 服务端/, 'the settings sheet must explain credential handling');
+assert.match(index, /登录凭证只加密保存在你的 Nido 服务端/, 'the settings sheet must explain credential handling');
 
 console.log('community parity checks passed');
