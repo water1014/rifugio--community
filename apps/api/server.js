@@ -118,6 +118,9 @@ const talkProactive = createTalkProactive({
   writeJsonSetting,
   sanitizeTalkMessages: value => sanitizeTalkMessages(value),
   sendWebPushNotification,
+  maskKey,
+  encrypt,
+  decrypt,
 });
 const {
   TALK_PROACTIVE_POLL_MS,
