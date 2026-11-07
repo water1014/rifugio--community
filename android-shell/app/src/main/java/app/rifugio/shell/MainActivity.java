@@ -210,6 +210,13 @@ public class MainActivity extends Activity {
         String messageId = intent.getStringExtra(EXTRA_MESSAGE_ID);
         if (messageId == null || messageId.isEmpty()) messageId = intent.getStringExtra("messageId");
         if (conversationId == null || conversationId.trim().isEmpty()) return;
+        JSONObject pending = new JSONObject();
+        try {
+            pending.put("conversationId", conversationId);
+            pending.put("messageId", messageId == null ? "" : messageId);
+            getSharedPreferences(NidoMessagingService.PREFS, MODE_PRIVATE)
+                    .edit().putString("pending_notification", pending.toString()).apply();
+        } catch (Exception ignored) {}
         String script = "window.dispatchEvent(new CustomEvent('nido:open-conversation',{detail:{conversationId:"
                 + JSONObject.quote(conversationId) + ",messageId:"
                 + JSONObject.quote(messageId == null ? "" : messageId) + "}}));";
@@ -239,6 +246,14 @@ public class MainActivity extends Activity {
         @JavascriptInterface public String getUnifiedPushSubscription() {
             return getSharedPreferences(NidoMessagingService.PREFS, MODE_PRIVATE)
                     .getString("unified_push_subscription", "");
+        }
+        @JavascriptInterface public String getPendingNotification() {
+            return getSharedPreferences(NidoMessagingService.PREFS, MODE_PRIVATE)
+                    .getString("pending_notification", "");
+        }
+        @JavascriptInterface public void clearPendingNotification() {
+            getSharedPreferences(NidoMessagingService.PREFS, MODE_PRIVATE)
+                    .edit().remove("pending_notification").apply();
         }
         @JavascriptInterface public void enableUnifiedPush(String vapidPublicKey) {
             runOnUiThread(() -> {
