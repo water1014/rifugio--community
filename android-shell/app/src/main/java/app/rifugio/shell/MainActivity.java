@@ -317,39 +317,11 @@ public class MainActivity extends Activity {
         return output.toByteArray();
     }
 
-    private byte[] extractFirstNaiImage(byte[] response) throws Exception {
-        if (response.length >= 2 && response[0] == 0x50 && response[1] == 0x4b) {
-            try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(response))) {
-                ZipEntry entry;
-                while ((entry = zip.getNextEntry()) != null) {
-                    if (entry.isDirectory()) continue;
-                    String name = entry.getName().toLowerCase(java.util.Locale.ROOT);
-                    if (!(name.endsWith(".png") || name.endsWith(".webp")
-                            || name.endsWith(".jpg") || name.endsWith(".jpeg"))) continue;
-                    byte[] image = readBytesLimited(zip, 30 * 1024 * 1024);
-                    if (image.length > 0) return image;
-                }
-            }
-            throw new IllegalStateException("NAI 返回 ZIP，但里面没有可识别的图片");
-        }
-        if (response.length >= 8 && (response[0] & 255) == 0x89
-                && response[1] == 0x50 && response[2] == 0x4e && response[3] == 0x47) return response;
-        if (response.length >= 12 && response[0] == 'R' && response[1] == 'I'
-                && response[2] == 'F' && response[3] == 'F'
-                && response[8] == 'W' && response[9] == 'E'
-                && response[10] == 'B' && response[11] == 'P') return response;
-        if (response.length >= 3 && (response[0] & 255) == 0xff
-                && (response[1] & 255) == 0xd8 && (response[2] & 255) == 0xff) return response;
-        String raw = new String(response, StandardCharsets.UTF_8);
-        try {
-            JSONObject json = new JSONObject(raw);
-            String encoded = json.optString("data", json.optString("b64_json", ""));
-            if (encoded.startsWith("data:image/")) encoded = encoded.substring(encoded.indexOf(",") + 1);
-            if (!encoded.isEmpty()) return Base64.decode(encoded, Base64.DEFAULT);
-            String message = json.optString("message", json.optString("error", ""));
-            if (!message.isEmpty()) throw new IllegalStateException(message);
-        } catch (org.json.JSONException ignored) {}
-        throw new IllegalStateException("NAI 响应不是图片或 ZIP，请检查接口地址和返回格式");
+    private boolean isNaiImage(byte[] image) {
+        return (image.length >= 8 && (image[0] & 255) == 0x89 && image[1] == 0x50 && image[2] == 0x4e && image[3] == 0x47)
+                || (image.length >= 12 && image[0] == 'R' && image[1] == 'I' && image[2] == 'F' && image[3] == 'F'
+                    && image[8] == 'W' && image[9] == 'E' && image[10] == 'B' && image[11] == 'P')
+                || (image.length >= 3 && (image[0] & 255) == 0xff && (image[1] & 255) == 0xd8 && (image[2] & 255) == 0xff);
     }
 
     private String naiImageMime(byte[] image) {
@@ -360,6 +332,51 @@ public class MainActivity extends Activity {
         if (image.length >= 3 && (image[0] & 255) == 0xff
                 && (image[1] & 255) == 0xd8 && (image[2] & 255) == 0xff) return "image/jpeg";
         return "image/png";
+    }
+
+    private org.json.JSONArray extractNaiImages(byte[] response) throws Exception {
+        org.json.JSONArray images = new org.json.JSONArray();
+        if (response.length >= 2 && response[0] == 0x50 && response[1] == 0x4b) {
+            try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(response))) {
+                ZipEntry entry;
+                while ((entry = zip.getNextEntry()) != null && images.length() < 4) {
+                    if (entry.isDirectory()) continue;
+                    String name = entry.getName().toLowerCase(java.util.Locale.ROOT);
+                    if (!(name.endsWith(".png") || name.endsWith(".webp")
+                            || name.endsWith(".jpg") || name.endsWith(".jpeg"))) continue;
+                    byte[] image = readBytesLimited(zip, 30 * 1024 * 1024);
+                    if (isNaiImage(image)) images.put("data:" + naiImageMime(image) + ";base64,"
+                            + Base64.encodeToString(image, Base64.NO_WRAP));
+                }
+            }
+            if (images.length() > 0) return images;
+            throw new IllegalStateException("NAI 返回 ZIP，但里面没有可识别的图片");
+        }
+        if (isNaiImage(response)) {
+            images.put("data:" + naiImageMime(response) + ";base64,"
+                    + Base64.encodeToString(response, Base64.NO_WRAP));
+            return images;
+        }
+        String raw = new String(response, StandardCharsets.UTF_8);
+        try {
+            JSONObject json = new JSONObject(raw);
+            org.json.JSONArray data = json.optJSONArray("data");
+            if (data != null) {
+                for (int i = 0; i < data.length() && images.length() < 4; i++) {
+                    JSONObject item = data.optJSONObject(i);
+                    String encoded = item == null ? "" : item.optString("b64_json", item.optString("data", ""));
+                    if (!encoded.isEmpty()) {
+                        byte[] image = Base64.decode(encoded.replaceFirst("^data:image/[^;]+;base64,", ""), Base64.DEFAULT);
+                        if (isNaiImage(image)) images.put("data:" + naiImageMime(image) + ";base64,"
+                                + Base64.encodeToString(image, Base64.NO_WRAP));
+                    }
+                }
+            }
+            if (images.length() > 0) return images;
+            String message = json.optString("message", json.optString("error", ""));
+            if (!message.isEmpty()) throw new IllegalStateException(message);
+        } catch (org.json.JSONException ignored) {}
+        throw new IllegalStateException("NAI 响应不是图片或 ZIP，请检查接口地址和返回格式");
     }
 
     private void enqueueNativeNaiImage(String requestId, String rawUrl, String rawHeaders, String body) {
@@ -415,9 +432,9 @@ public class MainActivity extends Activity {
                     result.put("error", "NAI 返回 HTTP " + status + (detail.isEmpty() ? "" : "：" + detail.substring(0, Math.min(500, detail.length()))));
                 } else {
                     byte[] response = readBytesLimited(connection.getInputStream(), 30 * 1024 * 1024);
-                    byte[] image = extractFirstNaiImage(response);
-                    result.put("imageDataUrl", "data:" + naiImageMime(image) + ";base64,"
-                            + Base64.encodeToString(image, Base64.NO_WRAP));
+                    org.json.JSONArray images = extractNaiImages(response);
+                    result.put("imageDataUrls", images);
+                    result.put("imageDataUrl", images.optString(0, ""));
                 }
             } catch (Exception error) {
                 try {
