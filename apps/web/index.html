@@ -5166,11 +5166,19 @@
     window.__NIDO_REPORT_BOOT_ERROR__ = report;
     window.addEventListener('error', function (event) {
         var target = event.target;
-        if (target && target !== window && target.src) {
-            report('资源加载失败', target.src);
-            return;
+        if (target && target !== window && target.nodeType === 1) {
+            var tag = String(target.tagName || 'UNKNOWN').toLowerCase();
+            var attr = target.getAttribute('src') || target.getAttribute('href') || '';
+            var resolved = target.currentSrc || (attr ? target.src || target.href || '' : '');
+            var detail = '元素：<' + tag + '>\n声明地址：' + (attr || '（没有设置 src/href）')
+                + (resolved && resolved !== attr ? '\n解析地址：' + resolved : '');
+            if (tag === 'img' || tag === 'script' || tag === 'link' || tag === 'source' || tag === 'iframe') {
+                report('资源加载失败', detail);
+                return;
+            }
         }
-        report('JavaScript 错误', [event.message, event.filename, event.lineno, event.error && event.error.stack].filter(Boolean).join('\n'));
+        report('JavaScript 错误', [event.message, event.filename, event.lineno,
+            event.error && event.error.stack].filter(Boolean).join('\n'));
     }, true);
     window.addEventListener('unhandledrejection', function (event) {
         var reason = event.reason;
