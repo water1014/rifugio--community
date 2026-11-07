@@ -148,6 +148,8 @@ test('Web Push registration rejects private-network endpoints and accepts public
     readJsonSetting: (key, fallback) => store.has(key) ? store.get(key) : fallback,
     writeJsonSetting: (key, value) => store.set(key, value),
     isAuthed: req => req.owner === true,
+    encrypt: value => 'enc:' + value,
+    decrypt: value => value.replace(/^enc:/, ''),
   }).mountPushRoutes(app);
 
   const makeResponse = () => {
@@ -177,6 +179,9 @@ test('Web Push registration rejects private-network endpoints and accepts public
   assert.equal(accepted.statusCode, 200);
   assert.equal(accepted.body.ok, true);
   assert.equal(store.get('push_subscriptions').length, 1);
+  assert.equal(typeof store.get('push_subscriptions')[0].dataEnc, 'string');
+  assert.equal(Object.hasOwn(store.get('push_subscriptions')[0], 'endpoint'), false);
+  assert.equal(Object.hasOwn(store.get('push_subscriptions')[0], 'keys'), false);
 });
 
 test('push test endpoint is owner-authenticated and fans out to native delivery', async () => {
