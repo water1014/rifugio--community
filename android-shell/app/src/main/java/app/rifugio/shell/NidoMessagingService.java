@@ -37,11 +37,11 @@ public class NidoMessagingService extends FirebaseMessagingService {
                 ? message.getNotification().getTitle() : data.getOrDefault("title", "Nido");
         String body = message.getNotification() != null && message.getNotification().getBody() != null
                 ? message.getNotification().getBody() : data.getOrDefault("body", "有一条新消息");
-        showNotification(title, body, data);
+        showNotification(this, title, body, data);
     }
 
-    private void showNotification(String title, String body, Map<String, String> data) {
-        NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+    static void showNotification(android.content.Context context, String title, String body, Map<String, String> data) {
+        NotificationManager manager = (NotificationManager) context.getSystemService(android.content.Context.NOTIFICATION_SERVICE);
         if (manager == null) return;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
@@ -51,14 +51,14 @@ public class NidoMessagingService extends FirebaseMessagingService {
             manager.createNotificationChannel(channel);
         }
 
-        Intent open = new Intent(this, MainActivity.class);
+        Intent open = new Intent(context, MainActivity.class);
         open.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         open.putExtra(MainActivity.EXTRA_CONVERSATION_ID,
                 data.getOrDefault("conversationId", data.getOrDefault("convoId", "")));
         open.putExtra(MainActivity.EXTRA_MESSAGE_ID, data.getOrDefault("messageId", ""));
         int requestCode = (data.getOrDefault("messageId", UUID.randomUUID().toString())).hashCode();
         PendingIntent pending = PendingIntent.getActivity(
-                this, requestCode, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                context, requestCode, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_MESSAGES)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
