@@ -1929,6 +1929,7 @@
             };
             const onChatroomProviderChange = (port) => {
                 port.model = '';
+                port.available_models = [];
                 const defaults = {
                     openai:'https://api.openai.com/v1',
                     opencode-go:'https://opencode.ai/zen/go',
