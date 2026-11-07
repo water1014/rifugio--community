@@ -81,7 +81,8 @@ function completionUrl(baseUrl, provider = 'compatible') {
 
 function safeModel(value) {
   const model = cleanText(value, 120);
-  if (!model || !/^[A-Za-z0-9._:/-]+$/.test(model)) throw new Error('Model 名称不正确');
+  if (!model) return '';
+  if (!/^[A-Za-z0-9._:/-]+$/.test(model)) throw new Error('Model 名称不正确');
   return model;
 }
 
@@ -130,16 +131,19 @@ function mountPetAiRoutes(app, options = {}) {
     finally { db.close(); }
   };
 
-  const publicConfig = stored => ({
-    provider: cleanText(stored.provider || 'openai', 30),
+  const publicConfig = stored => {
+    const provider = cleanText(stored.provider || 'openai', 30);
+    return {
+    provider,
     base_url: cleanText(stored.base_url || 'https://api.openai.com/v1', 240),
     api_key: stored.api_key_enc ? maskKey(decrypt(stored.api_key_enc)) : '',
     custom_headers: stored.custom_headers_enc ? decrypt(stored.custom_headers_enc) : '',
-    model: cleanText(stored.model || 'gpt-4o-mini', 120),
+    model: cleanText(stored.model || (provider === 'openai' ? 'gpt-4o-mini' : ''), 120),
     daily_diary: stored.daily_diary === true,
     daily_hour: normalizeHour(stored.daily_hour),
     safety_scope: 'pet-profile-status-recent-diary-only',
-  });
+  };
+  };
 
   const resolvedConfig = (incoming = {}, allowIncomingKey = false) => {
     const stored = readStoredConfig();
@@ -151,10 +155,12 @@ function mountPetAiRoutes(app, options = {}) {
     if (incoming.custom_headers !== undefined) customHeaders = typeof incoming.custom_headers === 'string'
       ? incoming.custom_headers : JSON.stringify(incoming.custom_headers || {});
     normalizeCustomHeaders(customHeaders);
+    const provider = cleanText(merged.provider || 'openai', 30);
+    const defaultModel = provider === 'openai' ? 'gpt-4o-mini' : '';
     return {
-      provider: cleanText(merged.provider || 'openai', 30),
+      provider,
       base_url: validateBaseUrl(merged.base_url || 'https://api.openai.com/v1'),
-      model: safeModel(merged.model || 'gpt-4o-mini'),
+      model: safeModel(merged.model || defaultModel),
       api_key: normalizeApiKey(apiKey),
       custom_headers: customHeaders,
       daily_diary: merged.daily_diary === true,
@@ -178,7 +184,7 @@ function mountPetAiRoutes(app, options = {}) {
       ? `当前正在和你聊天的人是${context.caregiver === 'dad' ? '爸爸' : '妈妈'}「${caregiverName}」。对方消息里的“我”默认就是${context.caregiver === 'dad' ? '爸爸' : '妈妈'}，称呼对方时优先叫${context.caregiver === 'dad' ? '爸爸' : '妈妈'}。`
       : '';
     return [
-      `你是 Rifugio 小屋里刚出生的像素螃蟹 ${context.profile.name}，用第一人称和家人说话。你必须清楚记得自己的名字是 ${context.profile.name}。`,
+      `你是 Nido 里刚出生的像素螃蟹 ${context.profile.name}，用第一人称和家人说话。你必须清楚记得自己的名字是 ${context.profile.name}。`,
       caregiverLine,
       `宝宝资料：${JSON.stringify(context.profile)}`,
       `这是你此刻从数据库重新读取的最新状态：${JSON.stringify(context.status)}`,
@@ -193,6 +199,7 @@ function mountPetAiRoutes(app, options = {}) {
 
   const callModel = async ({ config, messages, maxTokens = 420, temperature = 0.8 }) => {
     if (!config.api_key) throw new Error('请先在总设置里填写养娃 API Key');
+    if (!config.model) throw new Error('请先在养娃 API 设置中选择模型 ID');
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 30000);
     try {
@@ -261,10 +268,13 @@ function mountPetAiRoutes(app, options = {}) {
     try {
       const incoming = req.body && typeof req.body === 'object' ? req.body : {};
       const previous = readStoredConfig();
+      const provider = cleanText(incoming.provider || previous.provider || 'openai', 30);
+      const defaultModel = provider === 'openai' ? 'gpt-4o-mini' : '';
+      const modelValue = incoming.model !== undefined ? incoming.model : (previous.model || defaultModel);
       const stored = {
-        provider: cleanText(incoming.provider || previous.provider || 'openai', 30),
+        provider,
         base_url: validateBaseUrl(incoming.base_url || previous.base_url || 'https://api.openai.com/v1'),
-        model: safeModel(incoming.model || previous.model || 'gpt-4o-mini'),
+        model: safeModel(modelValue),
         daily_diary: incoming.daily_diary === true,
         daily_hour: normalizeHour(incoming.daily_hour),
       };
