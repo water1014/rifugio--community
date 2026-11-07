@@ -265,11 +265,33 @@ window.Rifugio.useTalk = function(ctx) {
                 ttsFetchStatus: '',
                 imageFetchStatus: '',
             });
+            const NIDO_SECRET_SETTING_MAP = {
+                apiKey:'talk_api_key',
+                ttsApiKey:'talk_tts_api_key',
+                ttsToken:'talk_tts_token',
+                naiApiKey:'talk_nai_api_key',
+            };
             let savedTalkSettings = {};
             try {
                 savedTalkSettings = JSON.parse(localStorage.getItem(TALK_SETTINGS_LS) || '{}') || {};
                 Object.assign(talkSettings, savedTalkSettings);
             } catch(_) {}
+            if (window.NidoNative?.getSecret && window.NidoNative?.setSecret) {
+                const safeSettings = { ...savedTalkSettings };
+                Object.entries(NIDO_SECRET_SETTING_MAP).forEach(([field, secretName]) => {
+                    try {
+                        const storedSecret = window.NidoNative.getSecret(secretName);
+                        if (storedSecret) talkSettings[field] = storedSecret;
+                        else if (String(savedTalkSettings[field] || '')) {
+                            if (window.NidoNative.setSecret(secretName, String(savedTalkSettings[field]))) {
+                                talkSettings[field] = String(savedTalkSettings[field]);
+                            }
+                        }
+                    } catch(_) {}
+                    delete safeSettings[field];
+                });
+                try { localStorage.setItem(TALK_SETTINGS_LS, JSON.stringify(safeSettings)); } catch(_) {}
+            }
             const stripBundledTalkPresetCss = (css) => {
                 let next = String(css || '');
                 [TALK_IMESSAGE_CUSTOM_CSS_PRESET, TALK_COMPANION_CUSTOM_CSS_PRESET].forEach(preset => {
@@ -413,7 +435,16 @@ window.Rifugio.useTalk = function(ctx) {
                 event.target.value = '';
             };
             const saveTalkSettings = () => {
-                try { localStorage.setItem(TALK_SETTINGS_LS, JSON.stringify({ ...talkSettings })); } catch(_) {}
+                try {
+                    const persisted = { ...talkSettings };
+                    if (window.NidoNative?.setSecret) {
+                        Object.entries(NIDO_SECRET_SETTING_MAP).forEach(([field, secretName]) => {
+                            try { window.NidoNative.setSecret(secretName, String(talkSettings[field] || '')); } catch(_) {}
+                            delete persisted[field];
+                        });
+                    }
+                    localStorage.setItem(TALK_SETTINGS_LS, JSON.stringify(persisted));
+                } catch(_) {}
                 applyTalkCustomCss();
                 applyGlobalFont();
             };
