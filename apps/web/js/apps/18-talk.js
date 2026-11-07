@@ -599,11 +599,6 @@ window.Rifugio.useTalk = function(ctx) {
                 saveTalkSettings();
                 scheduleTalkProactive();
             });
-            Vue.watch(() => activeConvo.value?.id, () => {
-                if (!window.NidoNative) return;
-                syncNidoProactiveContext(activeConvo.value);
-                scheduleTalkProactive();
-            });
             Vue.watch(() => talkSettings.provider, (provider) => {
                 // 只切换当前大脑，不改 Claude 自己保存的 Terminal / -p 执行偏好。
                 if (provider === 'openai-compatible') {
@@ -970,6 +965,11 @@ window.Rifugio.useTalk = function(ctx) {
                 finally { talkMomentsLoading = false; }
             };
             const activeConvo = Vue.computed(() => talk.convos.find(c => c.id === talk.activeId) || null);
+            Vue.watch(() => activeConvo.value?.id, () => {
+                if (!window.NidoNative) return;
+                syncNidoProactiveContext(activeConvo.value);
+                scheduleTalkProactive();
+            });
             const talkConvoTitle = (c) => String(c?.remark || c?.name || '新对话');
             const talkSortedConvos = Vue.computed(() => {
                 const rows = [...talk.convos].map(normalizeTalkConvoMeta).sort((a, b) => {
