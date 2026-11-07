@@ -459,7 +459,7 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
                     if (!key) throw new Error('请先填写 NovelAI API Key');
                     if (imageStudio.localMode) {
                         const base = normalizeImageBaseUrl(talkSettings.imageBaseUrl, 'novelai');
-                        if (base && !/(^https?:\\/\\/)?image\\.novelai\\.net\\/?$/i.test(base)) {
+                        if (base && !/(^https?:\/\/)?image\.novelai\.net\/?$/i.test(base)) {
                             imageStudio.testStatus = '第三方 NAI 地址已设置，请用下方“测试生图”验证实际出图';
                             return;
                         }
