@@ -1637,7 +1637,7 @@
             const CHATROOM_PROFILE_LS = 'rifugio-chatroom-profile-v1';
             const makeRoomPort = (id, label, persona, model='', provider='auto') => ({
                 id, label, persona, avatar:'', base_url:'', api_key:'', custom_headers:'', model, provider, enabled:true, availableModels:[], status:'', cache_status:'',
-                rifugio_experience:id !== 'cc',
+                rifugio_experience:true,
                 split_regex:'(?<=。。)\\s*|(?<=\\.\\.)\\s*|(?<=[。！？!?~…])(?![。！？!?~…])\\s*'
             });
             const chatroomProfile = reactive({ userName:'你', userAvatar:'', userNote:'', showAvatar:true });
@@ -1667,7 +1667,7 @@
                 target.custom_headers = saved.custom_headers || saved.customHeaders || target.custom_headers || '';
                 target.model = saved.model || target.model;
                 target.provider = saved.provider || target.provider || 'auto';
-                target.rifugio_experience = saved.rifugio_experience !== false && target.id !== 'cc';
+                target.rifugio_experience = saved.rifugio_experience !== false;
                 target.enabled = saved.enabled !== false;
                 target.split_regex = saved.split_regex || saved.splitRegex || target.split_regex || '(?<=。。)\\s*|(?<=\\.\\.)\\s*|(?<=[。！？!?~…])(?![。！？!?~…])\\s*';
             };
