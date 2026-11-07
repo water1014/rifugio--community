@@ -64,8 +64,8 @@ assert.match(talkStream, /\['opencode-go', 'deepseek'\]\.includes\(talkSettings\
 assert.match(talk, /'\/api\/talk-api\/v1\/models'/, 'Talk model lookup must use the protocol-aware backend route');
 assert.match(talkStream, /provider:talkSettings\.apiProtocol === 'anthropic' \? 'anthropic' : \(\['opencode-go', 'deepseek'\]\.includes\(talkSettings\.apiProtocol\) \? talkSettings\.apiProtocol : 'compatible'\)/, 'Talk chat must preserve OpenCode Go and DeepSeek provider identifiers');
 assert.doesNotMatch(talkStream, /provider:'auto'/, 'Claude-named relay models must not silently switch to Anthropic auth');
-assert.match(index, /OpenAI 兼容 \/ OpenCode Go（Bearer · \/chat\/completions）/, 'Talk settings must explain compatible relay authentication and OpenCode Go routing');
-assert.match(index, /Anthropic 原生（x-api-key · \/messages）/, 'Talk settings must keep native Anthropic as an explicit option');
+assert.match(index, /Nido 不依赖 Claude 订阅，支持 OpenCode Go、DeepSeek 和其他 OpenAI 兼容服务/, 'Talk settings must explain the API-first providers supported by Nido');
+assert.match(index, /OpenCode Go 地址可使用 https:\/\/opencode\.ai\/zen\/go/, 'Talk settings must show the supported OpenCode Go endpoint');
 
 assert.ok(!radio.includes('api.qrserver.com'), 'NetEase login must use a real one-time QR session, not a homepage QR');
 assert.ok(!radio.includes("netease:'https://music.163.com/'"), 'the NetEase homepage is not a login callback');
