@@ -51,7 +51,8 @@ FCM needs an app-specific Firebase project configuration and server-side credent
 ## Existing implementation findings
 
 - `apps/api/modules/talk-proactive.js` runs on the server and calculates quiet windows / due times. This is a useful scheduler foundation.
-- The same module currently generates messages by internally calling `/api/terminal-chat/send`, so proactive generation is still coupled to the Claude Code terminal.
+- Proactive generation has been moved off `/api/terminal-chat/send` and onto the configured provider API. OpenCode Go, DeepSeek, and compatible providers use the shared endpoint/header/session helpers; provider credentials are encrypted in the server settings store and masked in settings responses.
+- Tests now cover OpenCode Go proactive request routing, conversation context, session headers, and encrypted/masked provider credentials. CI still needs to pass before this change is considered verified.
 - `apps/api/modules/push-routes.js` currently stores Web Push subscriptions and sends VAPID notifications.
 - The Talk UI currently asks for browser Notification permission and subscribes a Service Worker. Android native push needs a separate token-registration and delivery path.
 - The current Android shell asks the user to enter an HTTPS server URL. That setup screen is explicitly temporary and must be removed from the final product.
