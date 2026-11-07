@@ -60,7 +60,7 @@ public class NidoMessagingService extends FirebaseMessagingService {
         PendingIntent pending = PendingIntent.getActivity(
                 context, requestCode, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-        Notification notification = new NotificationCompat.Builder(this, CHANNEL_MESSAGES)
+        Notification notification = new NotificationCompat.Builder(context, CHANNEL_MESSAGES)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setContentTitle(title == null || title.isEmpty() ? "Nido" : title)
                 .setContentText(body == null || body.isEmpty() ? "有一条新消息" : body)
