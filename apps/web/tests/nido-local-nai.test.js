@@ -64,6 +64,13 @@ test('local API chat exposes a NovelAI function tool and attaches generated imag
   assert.match(stream, /kind:'image'/);
 });
 
+test('NAI tool-call incompatibility falls back to ordinary provider chat', () => {
+  assert.match(stream, /const sendProviderPayload = async \(payload\)/);
+  assert.match(stream, /Some OpenAI-compatible models do not implement function calling/);
+  assert.match(stream, /delete providerPayload\.tools/);
+  assert.match(stream, /\[400, 404, 422\]\.includes\(Number\(r\.status\)\)/);
+});
+
 test('changed Nido JavaScript modules parse successfully', () => {
   for (const [name, source] of [
     ['18-talk-image.js', studio],
