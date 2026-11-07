@@ -141,7 +141,13 @@ function providerRequestHeaders(apiKey, customHeaders = {}, provider = 'compatib
   const defaults = provider === 'anthropic'
     ? { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }
     : { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` };
-  return { ...defaults, ...normalizeCustomHeaders(customHeaders) };
+  const merged = { ...defaults };
+  for (const [name, value] of Object.entries(normalizeCustomHeaders(customHeaders))) {
+    const existing = Object.keys(merged).find(key => key.toLowerCase() === name.toLowerCase());
+    if (existing) delete merged[existing];
+    merged[name] = value;
+  }
+  return merged;
 }
 
 function endpointFor(baseUrl, provider) {
