@@ -156,3 +156,12 @@ test('Android WebView supports local JSON file import through the system picker'
   assert.match(native, /WebChromeClient\.FileChooserParams\.parseResult/);
   assert.match(native, /FILE_CHOOSER_REQUEST_CODE/);
 });
+
+test('standalone Nido keeps favorite chat quotes and profile local', () => {
+  const exporter = read('apps/web/js/apps/18-talk-export.js');
+  assert.match(exporter, /NIDO_LOCAL_QUOTES_KEY = 'nido-local-favorite-quotes-v1'/);
+  assert.match(exporter, /const readNidoLocalQuotes = \(\) =>/);
+  assert.match(exporter, /if \(window\.NidoNative\) \{[\s\S]*?readNidoLocalQuotes\(\)/);
+  assert.match(exporter, /已收藏到本机摘句/);
+  assert.match(talk, /if \(!savedTalkProfile && !isNidoLocalApp\(\)\)/);
+});
