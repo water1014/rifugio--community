@@ -1023,7 +1023,7 @@ window.Rifugio.useTalkStream = function(ctx) {
                             credentials:'include',
                             headers:{ 'Content-Type':'application/json' },
                             body:JSON.stringify({
-                                provider:talkSettings.apiProtocol === 'anthropic' ? 'anthropic' : 'compatible',
+                                provider:talkSettings.apiProtocol === 'anthropic' ? 'anthropic' : (talkSettings.apiProtocol === 'opencode-go' ? 'opencode-go' : 'compatible'),
                                 base_url:base,
                                 api_key:talkSettings.apiKey,
                                 custom_headers:talkSettings.customHeaders,
