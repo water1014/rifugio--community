@@ -1056,6 +1056,22 @@ window.Rifugio.useTalkStream = function(ctx) {
                 return headers;
             };
 
+            const NIDO_NAI_CHAT_TOOL = {
+                type:'function',
+                function:{
+                    name:'nido_generate_image',
+                    description:'当用户明确要求看图片、画图、生成插画或你们的聊天情境明确适合主动配图时调用 NovelAI 生图。scene 写场景、动作、镜头和构图；characters 分别写每个人物的视觉提示词。使用当前已激活的画师预设和角色设定，不要把普通文字请求误判为生图。',
+                    parameters:{
+                        type:'object',
+                        properties:{
+                            scene:{ type:'string', description:'正向提示词中的场景、动作、镜头、构图和氛围，使用适合 NovelAI 的标签式提示词' },
+                            characters:{ type:'array', items:{type:'string'}, description:'可选，多角色时每个角色一条独立视觉提示词' },
+                            negative:{ type:'string', description:'可选，额外负向提示词' },
+                        },
+                        required:['scene'],
+                    },
+                },
+            };
             const sendTalkMessage = async (text, attachments=[], internalRetry = {}) => {
                 const retryInfo = internalRetry && typeof internalRetry === 'object' ? internalRetry : {};
                 const extraInstruction = String(retryInfo.extraInstruction || '').trim();
@@ -1147,51 +1163,114 @@ window.Rifugio.useTalkStream = function(ctx) {
                         const timeContext = talkSettings.timestampUserMessages !== false ? `[time: ${nowForModel()}]` : '';
                         const systemMessages = [timeContext, userContext, characterContext].filter(Boolean).map(content => ({ role:'system', content }));
                         const messages = [...systemMessages, ...history];
+                        const canUseLocalNaiTool = Boolean(
+                            window.NidoNative?.postNaiImage
+                            && String(talkSettings.naiApiKey || '').trim()
+                            && typeof generateNaiImageForChat === 'function'
+                        );
                         const providerPayload = {
                             model:talkSettings.apiModel,
                             messages,
                             temperature:.85,
                             stream:false,
+                            ...(canUseLocalNaiTool ? { tools:[NIDO_NAI_CHAT_TOOL], tool_choice:'auto' } : {}),
                         };
                         const requestHeaders = nidoProviderHeaders();
                         const requestEndpoint = nidoChatEndpoint(base, talkSettings.apiProtocol);
-                        const r = window.NidoNative?.postJson
-                            ? await nidoNativePostJson(requestEndpoint, requestHeaders, providerPayload)
-                            : await fetch('/api/talk-api/v1/chat/completions', {
-                                method:'POST',
-                                credentials:'include',
-                                headers:{ 'Content-Type':'application/json' },
-                                body:JSON.stringify({
-                                    provider:talkSettings.apiProtocol === 'anthropic' ? 'anthropic' : (['opencode-go', 'deepseek'].includes(talkSettings.apiProtocol) ? talkSettings.apiProtocol : 'compatible'),
-                                    base_url:base,
-                                    api_key:talkSettings.apiKey,
-                                    custom_headers:talkSettings.customHeaders,
-                                    model:talkSettings.apiModel,
-                                    messages,
-                                    temperature:.85,
-                                    rifugio_experience:true,
-                                    cache_namespace:'talk:' + c.id,
-                                }),
-                            });
-                        if (!r.ok) {
-                            const detailText = r.nativeError || await r.text().catch(() => '');
-                            let detail = detailText;
-                            try {
-                                const parsed = JSON.parse(detailText);
-                                detail = String(parsed?.error?.message || parsed?.error || parsed?.message || detailText);
-                            } catch(_) {}
-                            throw new Error(`API 桥连接失败（HTTP ${r.status}）${detail ? '：' + detail.slice(0, 240) : ''}`);
+                        let finalResponse = null;
+                        for (let toolRound = 0; toolRound < 3; toolRound++) {
+                            const r = window.NidoNative?.postJson
+                                ? await nidoNativePostJson(requestEndpoint, requestHeaders, providerPayload)
+                                : await fetch('/api/talk-api/v1/chat/completions', {
+                                    method:'POST',
+                                    credentials:'include',
+                                    headers:{ 'Content-Type':'application/json' },
+                                    body:JSON.stringify({
+                                        provider:talkSettings.apiProtocol === 'anthropic' ? 'anthropic' : (['opencode-go', 'deepseek'].includes(talkSettings.apiProtocol) ? talkSettings.apiProtocol : 'compatible'),
+                                        base_url:base,
+                                        api_key:talkSettings.apiKey,
+                                        custom_headers:talkSettings.customHeaders,
+                                        model:talkSettings.apiModel,
+                                        messages:providerPayload.messages,
+                                        temperature:.85,
+                                        rifugio_experience:true,
+                                        cache_namespace:'talk:' + c.id,
+                                        ...(canUseLocalNaiTool ? { tools:providerPayload.tools, tool_choice:'auto' } : {}),
+                                    }),
+                                });
+                            if (!r.ok) {
+                                const detailText = r.nativeError || await r.text().catch(() => '');
+                                let detail = detailText;
+                                try {
+                                    const parsed = JSON.parse(detailText);
+                                    detail = String(parsed?.error?.message || parsed?.error || parsed?.message || detailText);
+                                } catch(_) {}
+                                throw new Error(`API 桥连接失败（HTTP ${r.status}）${detail ? '：' + detail.slice(0, 240) : ''}`);
+                            }
+                            const j = await r.json();
+                            if (j.rifugio?.cache) {
+                                const cache = j.rifugio.cache;
+                                talk.sessionNotice = `API 缓存：命中 ${cache.hit_tokens || 0} · 写入 ${cache.write_tokens || 0} · 未命中 ${cache.miss_tokens || 0}`;
+                            }
+                            const msg = j.choices?.[0]?.message || {};
+                            const calls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
+                            if (!calls.length || !canUseLocalNaiTool) {
+                                finalResponse = j;
+                                break;
+                            }
+                            messages.push({ role:'assistant', content:msg.content || null, tool_calls:calls });
+                            assistantMsg.content = String(msg.content || '正在调用 NovelAI 绘制画面…').trim();
+                            assistantMsg.preview = true;
+                            for (const call of calls.slice(0, 2)) {
+                                const callId = String(call.id || ('nido-image-' + Date.now()));
+                                const name = String(call.function?.name || '');
+                                if (name !== 'nido_generate_image') {
+                                    messages.push({ role:'tool', tool_call_id:callId, content:'不支持的本地工具' });
+                                    continue;
+                                }
+                                let args = {};
+                                try {
+                                    args = typeof call.function?.arguments === 'string'
+                                        ? JSON.parse(call.function.arguments || '{}')
+                                        : (call.function?.arguments || {});
+                                } catch(_) {
+                                    messages.push({ role:'tool', tool_call_id:callId, content:'生图参数解析失败，请重新组织参数后再调用。' });
+                                    continue;
+                                }
+                                try {
+                                    talk.sessionNotice = '正在直连 NovelAI 生图…';
+                                    const result = await generateNaiImageForChat({
+                                        scene:String(args.scene || ''),
+                                        characters:Array.isArray(args.characters) ? args.characters : undefined,
+                                        negative:String(args.negative || ''),
+                                    });
+                                    assistantMsg.attachments = Array.isArray(assistantMsg.attachments) ? assistantMsg.attachments : [];
+                                    result.images.forEach((dataUrl, index) => {
+                                        assistantMsg.attachments.push({
+                                            id:'nido-nai-' + Date.now().toString(36) + '-' + index + '-' + Math.random().toString(36).slice(2,6),
+                                            kind:'image',
+                                            name:'NovelAI',
+                                            dataUrl,
+                                        });
+                                    });
+                                    messages.push({ role:'tool', tool_call_id:callId, content:`NovelAI 已成功生成 ${result.images.length} 张图片，已附加到当前聊天消息。Seed: ${result.seed}` });
+                                    saveTalk(); scrollTalkBottom();
+                                } catch(error) {
+                                    messages.push({ role:'tool', tool_call_id:callId, content:'NovelAI 生图失败：' + (error?.message || error) });
+                                }
+                            }
+                            providerPayload.messages = messages;
+                            if (toolRound === 2) {
+                                finalResponse = null;
+                                break;
+                            }
                         }
-                        const j = await r.json();
-                        if (j.rifugio?.cache) {
-                            const cache = j.rifugio.cache;
-                            talk.sessionNotice = `API 缓存：命中 ${cache.hit_tokens || 0} · 写入 ${cache.write_tokens || 0} · 未命中 ${cache.miss_tokens || 0}`;
-                        }
-                        const msg = j.choices?.[0]?.message || {};
-                        assistantMsg.content = (msg.content || '').trim() || '（空回复）';
-                        assistantMsg.thinking = (msg.reasoning_content || msg.reasoning || '').trim();
+                        const finalMessage = finalResponse?.choices?.[0]?.message || {};
+                        assistantMsg.content = String(finalMessage.content || assistantMsg.content || (assistantMsg.attachments?.length ? '图片已经生成好了。' : '（空回复）')).trim();
+                        assistantMsg.thinking = (finalMessage.reasoning_content || finalMessage.reasoning || '').trim();
                         assistantMsg.preview = false;
                         assistantMsg.done = true;
+                        talk.sessionNotice = '';
                         handleAssistantCallRequest(assistantMsg, c);
                         talk.thinking = false;
                         saveTalk(); pushConvo(c); scrollTalkBottom(); playTalkNotification(); showTalkToast(assistantMsg, c);
