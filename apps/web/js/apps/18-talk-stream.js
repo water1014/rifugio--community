@@ -1185,35 +1185,53 @@ window.Rifugio.useTalkStream = function(ctx) {
                         };
                         const requestHeaders = nidoProviderHeaders();
                         const requestEndpoint = nidoChatEndpoint(base, talkSettings.apiProtocol);
+                        const sendProviderPayload = async (payload) => window.NidoNative?.postJson
+                            ? nidoNativePostJson(requestEndpoint, requestHeaders, payload)
+                            : fetch('/api/talk-api/v1/chat/completions', {
+                                method:'POST',
+                                credentials:'include',
+                                headers:{ 'Content-Type':'application/json' },
+                                body:JSON.stringify({
+                                    provider:talkSettings.apiProtocol === 'anthropic' ? 'anthropic' : (['opencode-go', 'deepseek'].includes(talkSettings.apiProtocol) ? talkSettings.apiProtocol : 'compatible'),
+                                    base_url:base,
+                                    api_key:talkSettings.apiKey,
+                                    custom_headers:talkSettings.customHeaders,
+                                    model:talkSettings.apiModel,
+                                    messages:payload.messages,
+                                    temperature:.85,
+                                    rifugio_experience:true,
+                                    cache_namespace:'talk:' + c.id,
+                                    ...(payload.tools ? { tools:payload.tools, tool_choice:payload.tool_choice || 'auto' } : {}),
+                                }),
+                            });
                         let finalResponse = null;
                         for (let toolRound = 0; toolRound < 3; toolRound++) {
-                            const r = window.NidoNative?.postJson
-                                ? await nidoNativePostJson(requestEndpoint, requestHeaders, providerPayload)
-                                : await fetch('/api/talk-api/v1/chat/completions', {
-                                    method:'POST',
-                                    credentials:'include',
-                                    headers:{ 'Content-Type':'application/json' },
-                                    body:JSON.stringify({
-                                        provider:talkSettings.apiProtocol === 'anthropic' ? 'anthropic' : (['opencode-go', 'deepseek'].includes(talkSettings.apiProtocol) ? talkSettings.apiProtocol : 'compatible'),
-                                        base_url:base,
-                                        api_key:talkSettings.apiKey,
-                                        custom_headers:talkSettings.customHeaders,
-                                        model:talkSettings.apiModel,
-                                        messages:providerPayload.messages,
-                                        temperature:.85,
-                                        rifugio_experience:true,
-                                        cache_namespace:'talk:' + c.id,
-                                        ...(canUseLocalNaiTool ? { tools:providerPayload.tools, tool_choice:'auto' } : {}),
-                                    }),
-                                });
+                            let r = await sendProviderPayload(providerPayload);
                             if (!r.ok) {
-                                const detailText = r.nativeError || await r.text().catch(() => '');
+                                let detailText = r.nativeError || await r.text().catch(() => '');
                                 let detail = detailText;
                                 try {
                                     const parsed = JSON.parse(detailText);
                                     detail = String(parsed?.error?.message || parsed?.error || parsed?.message || detailText);
                                 } catch(_) {}
-                                throw new Error(`API 桥连接失败（HTTP ${r.status}）${detail ? '：' + detail.slice(0, 240) : ''}`);
+                                // Some OpenAI-compatible models do not implement function calling.
+                                // Retry ordinary chat without tools so enabling NAI never breaks text chat.
+                                if (canUseLocalNaiTool && providerPayload.tools
+                                    && [400, 404, 422].includes(Number(r.status))
+                                    && /tool|function|unsupported|not support|tool_choice/i.test(detail)) {
+                                    delete providerPayload.tools;
+                                    delete providerPayload.tool_choice;
+                                    r = await sendProviderPayload(providerPayload);
+                                    if (!r.ok) {
+                                        detailText = r.nativeError || await r.text().catch(() => '');
+                                        detail = detailText;
+                                        try {
+                                            const parsed = JSON.parse(detailText);
+                                            detail = String(parsed?.error?.message || parsed?.error || parsed?.message || detailText);
+                                        } catch(_) {}
+                                    }
+                                }
+                                if (!r.ok) throw new Error(`API 桥连接失败（HTTP ${r.status}）${detail ? '：' + detail.slice(0, 240) : ''}`);
                             }
                             const j = await r.json();
                             if (j.rifugio?.cache) {
