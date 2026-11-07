@@ -940,8 +940,12 @@ window.Rifugio.useTalkStream = function(ctx) {
                 if ((!text && !attachments.length) || talk.thinking) return null;
                 let c = activeConvo.value;
                 if (!c) { newTalk(); c = activeConvo.value; }
-                const selectedProvider = String(talkSettings.provider || 'claude-code');
+                const selectedProvider = String(talkSettings.provider || 'openai-compatible');
                 const isApiProvider = selectedProvider === 'openai-compatible';
+                if (isApiProvider && !String(talkSettings.apiModel || '').trim()) {
+                    talk.sessionNotice = '请先在「对话模型与 API」中拉取并选择模型 ID。';
+                    return null;
+                }
                 const isTerminalMode = !isApiProvider && talkSettings.executionMode === 'terminal';
                 const responseEngine = isApiProvider ? 'api' : (isTerminalMode ? 'terminal' : 'agent');
                 const shareText = socialShareCopyFromText(displayText || text);
@@ -1027,7 +1031,7 @@ window.Rifugio.useTalkStream = function(ctx) {
                                 base_url:base,
                                 api_key:talkSettings.apiKey,
                                 custom_headers:talkSettings.customHeaders,
-                                model:talkSettings.apiModel || c.model || 'gpt-4o-mini',
+                                model:talkSettings.apiModel,
                                 messages,
                                 temperature:.85,
                                 rifugio_experience:true,
