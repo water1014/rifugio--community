@@ -44,6 +44,10 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import java.security.KeyStore;
 import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.util.ArrayList;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -111,11 +115,14 @@ public class MainActivity extends Activity {
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                return assetLoader.shouldInterceptRequest(request.getUrl());
+                WebResourceResponse localImage = interceptNidoImage(request.getUrl());
+                return localImage != null ? localImage : assetLoader.shouldInterceptRequest(request.getUrl());
             }
 
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
-                return assetLoader.shouldInterceptRequest(Uri.parse(url));
+                Uri uri = Uri.parse(url);
+                WebResourceResponse localImage = interceptNidoImage(uri);
+                return localImage != null ? localImage : assetLoader.shouldInterceptRequest(uri);
             }
 
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -334,27 +341,30 @@ public class MainActivity extends Activity {
         return "image/png";
     }
 
-    private org.json.JSONArray extractNaiImages(byte[] response) throws Exception {
-        org.json.JSONArray images = new org.json.JSONArray();
+    private ArrayList<byte[]> extractNaiImages(byte[] response) throws Exception {
+        ArrayList<byte[]> images = new ArrayList<>();
+        int totalBytes = 0;
         if (response.length >= 2 && response[0] == 0x50 && response[1] == 0x4b) {
             try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(response))) {
                 ZipEntry entry;
-                while ((entry = zip.getNextEntry()) != null && images.length() < 4) {
+                while ((entry = zip.getNextEntry()) != null && images.size() < 4) {
                     if (entry.isDirectory()) continue;
                     String name = entry.getName().toLowerCase(java.util.Locale.ROOT);
                     if (!(name.endsWith(".png") || name.endsWith(".webp")
                             || name.endsWith(".jpg") || name.endsWith(".jpeg"))) continue;
-                    byte[] image = readBytesLimited(zip, 30 * 1024 * 1024);
-                    if (isNaiImage(image)) images.put("data:" + naiImageMime(image) + ";base64,"
-                            + Base64.encodeToString(image, Base64.NO_WRAP));
+                    byte[] image = readBytesLimited(zip, 16 * 1024 * 1024);
+                    if (isNaiImage(image)) {
+                        totalBytes += image.length;
+                        if (totalBytes > 30 * 1024 * 1024) throw new IllegalStateException("NAI 图片总大小超过 30 MB");
+                        images.add(image);
+                    }
                 }
             }
-            if (images.length() > 0) return images;
+            if (!images.isEmpty()) return images;
             throw new IllegalStateException("NAI 返回 ZIP，但里面没有可识别的图片");
         }
         if (isNaiImage(response)) {
-            images.put("data:" + naiImageMime(response) + ";base64,"
-                    + Base64.encodeToString(response, Base64.NO_WRAP));
+            images.add(response);
             return images;
         }
         String raw = new String(response, StandardCharsets.UTF_8);
@@ -362,21 +372,55 @@ public class MainActivity extends Activity {
             JSONObject json = new JSONObject(raw);
             org.json.JSONArray data = json.optJSONArray("data");
             if (data != null) {
-                for (int i = 0; i < data.length() && images.length() < 4; i++) {
+                for (int i = 0; i < data.length() && images.size() < 4; i++) {
                     JSONObject item = data.optJSONObject(i);
                     String encoded = item == null ? "" : item.optString("b64_json", item.optString("data", ""));
                     if (!encoded.isEmpty()) {
                         byte[] image = Base64.decode(encoded.replaceFirst("^data:image/[^;]+;base64,", ""), Base64.DEFAULT);
-                        if (isNaiImage(image)) images.put("data:" + naiImageMime(image) + ";base64,"
-                                + Base64.encodeToString(image, Base64.NO_WRAP));
+                        if (isNaiImage(image)) images.add(image);
                     }
                 }
             }
-            if (images.length() > 0) return images;
+            if (!images.isEmpty()) return images;
             String message = json.optString("message", json.optString("error", ""));
             if (!message.isEmpty()) throw new IllegalStateException(message);
         } catch (org.json.JSONException ignored) {}
         throw new IllegalStateException("NAI 响应不是图片或 ZIP，请检查接口地址和返回格式");
+    }
+
+    private String saveNaiImage(byte[] image) throws Exception {
+        String mime = naiImageMime(image);
+        String extension = mime.equals("image/webp") ? ".webp" : (mime.equals("image/jpeg") ? ".jpg" : ".png");
+        File directory = new File(getFilesDir(), "nido-images");
+        if (!directory.exists() && !directory.mkdirs()) throw new IllegalStateException("无法创建本地图片目录");
+        String name = Long.toString(System.currentTimeMillis(), 36) + "-"
+                + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 12) + extension;
+        File target = new File(directory, name);
+        try (FileOutputStream output = new FileOutputStream(target)) { output.write(image); }
+        return "https://appassets.androidplatform.net/nido-images/" + name;
+    }
+
+    private WebResourceResponse interceptNidoImage(Uri uri) {
+        if (uri == null || !"https".equalsIgnoreCase(uri.getScheme())
+                || !"appassets.androidplatform.net".equalsIgnoreCase(uri.getHost())) return null;
+        String path = uri.getPath() == null ? "" : uri.getPath();
+        if (!path.startsWith("/nido-images/")) return null;
+        String name = path.substring("/nido-images/".length());
+        if (!name.matches("[a-zA-Z0-9_-]{1,80}\\.(png|webp|jpg)$")) return new WebResourceResponse("text/plain", "UTF-8", null);
+        File target = new File(new File(getFilesDir(), "nido-images"), name);
+        if (!target.isFile()) return new WebResourceResponse("text/plain", "UTF-8", null);
+        String mime = name.endsWith(".webp") ? "image/webp" : (name.endsWith(".jpg") ? "image/jpeg" : "image/png");
+        try {
+            WebResourceResponse response = new WebResourceResponse(mime, null, new FileInputStream(target));
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                java.util.Map<String, String> headers = new java.util.HashMap<>();
+                headers.put("Cache-Control", "private, max-age=31536000, immutable");
+                response.setResponseHeaders(headers);
+            }
+            return response;
+        } catch (Exception error) {
+            return new WebResourceResponse("text/plain", "UTF-8", null);
+        }
     }
 
     private void enqueueNativeNaiImage(String requestId, String rawUrl, String rawHeaders, String body) {
@@ -432,9 +476,11 @@ public class MainActivity extends Activity {
                     result.put("error", "NAI 返回 HTTP " + status + (detail.isEmpty() ? "" : "：" + detail.substring(0, Math.min(500, detail.length()))));
                 } else {
                     byte[] response = readBytesLimited(connection.getInputStream(), 30 * 1024 * 1024);
-                    org.json.JSONArray images = extractNaiImages(response);
-                    result.put("imageDataUrls", images);
-                    result.put("imageDataUrl", images.optString(0, ""));
+                    ArrayList<byte[]> images = extractNaiImages(response);
+                    org.json.JSONArray urls = new org.json.JSONArray();
+                    for (byte[] image : images) urls.put(saveNaiImage(image));
+                    result.put("imageUrls", urls);
+                    result.put("imageUrl", urls.optString(0, ""));
                 }
             } catch (Exception error) {
                 try {
