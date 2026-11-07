@@ -8,6 +8,7 @@ window.Rifugio.useTalk = function(ctx) {
             // 后端 /api/chat 桥接 claude CLI，多对话 / 可命名 / 带记忆 / 可切模型
             // ============================================================
             const TALK_LS = 'rifugio-talk-v1';
+            const isNidoLocalApp = () => Boolean(window.NidoNative);
             const TALK_SETTINGS_LS = 'rifugio-talk-settings-v1';
             const TALK_MOMENTS_LS = 'rifugio-talk-moments-v1';
             const TALK_MODELS = [
@@ -694,6 +695,7 @@ window.Rifugio.useTalk = function(ctx) {
                 } catch(e) {}
             };
             const syncTalkMomentsToServer = async (options = {}) => {
+                if (isNidoLocalApp()) return false;
                 const moments = talkMomentsStoragePayload();
                 try {
                     const r = await fetch('/api/talk/moments', {
@@ -716,6 +718,7 @@ window.Rifugio.useTalk = function(ctx) {
             };
             loadTalkMomentsFromServer = async () => {
                 if (talkMomentsLoading) return;
+                if (isNidoLocalApp()) return;
                 talkMomentsLoading = true;
                 try {
                     const r = await fetch('/api/talk/moments?limit=80', { cache:'no-store', credentials:'include' });
@@ -1235,6 +1238,7 @@ window.Rifugio.useTalk = function(ctx) {
             //             tail 合并表达不了删除，否则被删的消息下次加载还魂。
             const pushConvo = (c, opts = {}) => {
                 if (!c) return Promise.resolve();
+                if (isNidoLocalApp()) return Promise.resolve();
                 sanitizeTalkConvo(c);
                 normalizeTalkConvoMeta(c);
                 const mode = opts.mode || 'tail';
@@ -1302,6 +1306,15 @@ window.Rifugio.useTalk = function(ctx) {
             };
             const loadConvoMessages = async (c, options = {}) => {
                 if (!c || !c.id) return;
+                if (isNidoLocalApp()) {
+                    c._messagesLoading = false;
+                    c._messagesPageLoaded = true;
+                    c._messagesLoaded = true;
+                    c._messagesHasMore = false;
+                    c._messagesBefore = 0;
+                    c.message_count = (c.messages || []).length;
+                    return;
+                }
                 const full = options.full === true;
                 if (!options.force && (full ? c._messagesLoaded : c._messagesPageLoaded)) return;
                 if (c._messagesLoading) return;
@@ -1410,6 +1423,7 @@ window.Rifugio.useTalk = function(ctx) {
             };
 
             const loadConvosFromDB = async (options = {}) => {
+                if (isNidoLocalApp()) return;
                 const append = Boolean(options?.append);
                 if (talk.convosLoading) return;
                 talk.convosLoading = true;
