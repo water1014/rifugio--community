@@ -1,5 +1,11 @@
+const crypto = require('crypto');
 const Database = require('./sqlite');
 const { USER_NAME, COMPANION_NAME } = require('./community-config');
+const {
+  providerFor, normalizeApiKey, normalizeCustomHeaders, providerRequestHeaders,
+  withOpenCodeSession, validatePublicBaseUrl, endpointFor, modelsEndpointFor,
+  runOpenAiCompatible, runAnthropic,
+} = require('./chatroom-api');
 
 function createSettingsMemoryRoutes(ctx = {}) {
   const {
@@ -16,6 +22,7 @@ function createSettingsMemoryRoutes(ctx = {}) {
       if (!row) return null;
       const cfg = JSON.parse(row.value);
       if (cfg.api_key_enc) cfg.api_key = decrypt(cfg.api_key_enc);
+      if (cfg.custom_headers_enc) cfg.custom_headers = decrypt(cfg.custom_headers_enc);
       return cfg;
     } finally { db.close(); }
   }
@@ -44,6 +51,10 @@ function createSettingsMemoryRoutes(ctx = {}) {
             if (parsed.api_key_enc) {
               parsed.api_key = maskKey(decrypt(parsed.api_key_enc));
               delete parsed.api_key_enc;
+            }
+            if (parsed.custom_headers_enc) {
+              parsed.custom_headers = decrypt(parsed.custom_headers_enc);
+              delete parsed.custom_headers_enc;
             }
             settings.llm = parsed;
           } catch(e) { settings.llm = null; }
@@ -106,6 +117,10 @@ function createSettingsMemoryRoutes(ctx = {}) {
           parsed.api_key = maskKey(decrypt(parsed.api_key_enc));
           delete parsed.api_key_enc;
         }
+        if (parsed.custom_headers_enc) {
+          parsed.custom_headers = decrypt(parsed.custom_headers_enc);
+          delete parsed.custom_headers_enc;
+        }
         res.json({ ok: true, data: parsed });
       } catch(e) { res.json({ ok: false, error: e.message }); }
       finally { db.close(); }
@@ -114,18 +129,24 @@ function createSettingsMemoryRoutes(ctx = {}) {
     app.put('/api/settings/llm', (req, res) => {
       const db = new Database(DB_PATH);
       try {
-        const { base_url, api_key, model, merge_prompt } = req.body;
+        const { base_url, api_key, model, merge_prompt, provider, custom_headers } = req.body || {};
         const existing = db.prepare("SELECT value FROM app_settings WHERE key='llm'").get();
         let stored = {};
         if (existing) { try { stored = JSON.parse(existing.value); } catch(e){} }
 
+        stored.provider = provider || stored.provider || 'compatible';
         stored.base_url = base_url || stored.base_url;
         stored.model = model || stored.model;
         stored.merge_prompt = merge_prompt !== undefined ? merge_prompt : stored.merge_prompt;
 
-        // If api_key is masked, keep old; otherwise encrypt new
+        // API credentials and custom headers are encrypted at rest.
         if (api_key && !api_key.includes('***')) {
-          stored.api_key_enc = encrypt(api_key);
+          stored.api_key_enc = encrypt(normalizeApiKey(api_key));
+        }
+        if (custom_headers !== undefined) {
+          const normalized = normalizeCustomHeaders(custom_headers);
+          stored.custom_headers_enc = encrypt(JSON.stringify(normalized));
+          delete stored.custom_headers;
         }
 
         db.prepare("INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES ('llm', ?, datetime('now'))").run(JSON.stringify(stored));
@@ -137,31 +158,35 @@ function createSettingsMemoryRoutes(ctx = {}) {
     app.post('/api/settings/llm/test', async (req, res) => {
       const db = new Database(DB_PATH, { readonly: true });
       try {
-        let { base_url, api_key, model } = req.body;
-        // If masked, get real key from db
-        if (!api_key || api_key.includes('***')) {
-          const row = db.prepare("SELECT value FROM app_settings WHERE key='llm'").get();
-          if (row) {
-            const parsed = JSON.parse(row.value);
-            if (parsed.api_key_enc) api_key = decrypt(parsed.api_key_enc);
-          }
-        }
+        const body = req.body || {};
+        let { base_url, api_key, model, provider, custom_headers } = body;
+        const row = db.prepare("SELECT value FROM app_settings WHERE key='llm'").get();
+        let stored = {};
+        if (row) { try { stored = JSON.parse(row.value); } catch (_) {} }
+        if (!api_key || api_key.includes('***')) api_key = stored.api_key_enc ? decrypt(stored.api_key_enc) : '';
+        if (custom_headers === undefined) custom_headers = stored.custom_headers_enc ? decrypt(stored.custom_headers_enc) : (stored.custom_headers || '');
+        base_url = base_url || stored.base_url || 'https://api.openai.com/v1';
+        model = model || stored.model || '';
+        provider = provider || stored.provider || 'compatible';
         db.close();
+        api_key = normalizeApiKey(api_key);
         if (!api_key) return res.json({ ok: false, error: 'No API key configured' });
 
-        const endpoint = String(base_url || 'https://api.openai.com/v1').replace(/\/+$/, '') + '/models';
-        const resp = await fetch(endpoint, {
-          headers: { 'Authorization': 'Bearer ' + api_key }
-        });
+        const resolvedProvider = providerFor(provider, base_url, model);
+        const checked = await validatePublicBaseUrl(base_url);
+        const endpoint = modelsEndpointFor(checked.toString().replace(/\/$/, ''));
+        const sessionHeaders = withOpenCodeSession(custom_headers, endpoint, 'memory-model-discovery', model || 'models');
+        const headers = providerRequestHeaders(api_key, sessionHeaders, resolvedProvider);
+        const resp = await fetch(endpoint, { headers, signal: AbortSignal.timeout(20000) });
         if (resp.ok) {
           const payload = await resp.json().catch(() => ({}));
           const data = (payload.data || payload.models || []).map(item => ({
             id: item && (item.id || item.name || item.model),
           })).filter(item => item.id);
-          res.json({ ok: true, data });
+          res.json({ ok: true, data, provider: resolvedProvider });
         } else {
-          const body = await resp.text();
-          res.json({ ok: false, error: `${resp.status}: ${body.slice(0, 200)}` });
+          const responseBody = await resp.text();
+          res.json({ ok: false, error: `${resp.status}: ${responseBody.slice(0, 200)}` });
         }
       } catch(e) {
         try { db.close(); } catch(x){}
@@ -180,8 +205,9 @@ function createSettingsMemoryRoutes(ctx = {}) {
         const settingsRow = db.prepare("SELECT value FROM app_settings WHERE key='llm'").get();
         if (!settingsRow) return res.json({ ok: false, error: 'No LLM configured' });
         const settings = JSON.parse(settingsRow.value);
-        let apiKey = settings.api_key_enc ? decrypt(settings.api_key_enc) : null;
+        const apiKey = settings.api_key_enc ? normalizeApiKey(decrypt(settings.api_key_enc)) : '';
         if (!apiKey) return res.json({ ok: false, error: 'No API key' });
+        if (settings.custom_headers_enc) settings.custom_headers = decrypt(settings.custom_headers_enc);
 
         // Get memories
         const placeholders = ids.map(() => '?').join(',');
@@ -191,26 +217,27 @@ function createSettingsMemoryRoutes(ctx = {}) {
         const memText = memories.map(m => `[${m.created_at}] [${m.category}] ${m.content}`).join('\n');
 
         // Call LLM
-        const llmResp = await fetch((settings.base_url || 'https://api.openai.com/v1') + '/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-          body: JSON.stringify({
-            model: settings.model || 'gpt-4o-mini',
-            messages: [
-              { role: 'system', content: prompt || settings.merge_prompt || 'Merge these memories into one concise entry.' },
-              { role: 'user', content: memText }
-            ],
-            max_tokens: 500
-          })
-        });
-
-        if (!llmResp.ok) {
-          const errBody = await llmResp.text();
-          return res.json({ ok: false, error: `LLM ${llmResp.status}: ${errBody.slice(0, 200)}` });
-        }
-
-        const llmData = await llmResp.json();
-        const merged = llmData.choices?.[0]?.message?.content;
+        const model = String(settings.model || 'gpt-4o-mini').trim();
+        const provider = providerFor(settings.provider, settings.base_url || 'https://api.openai.com/v1', model);
+        const checked = await validatePublicBaseUrl(settings.base_url || 'https://api.openai.com/v1');
+        const endpoint = endpointFor(checked.toString().replace(/\/$/, ''), provider);
+        const customHeaders = withOpenCodeSession(settings.custom_headers || '', endpoint, 'memory-merge', model);
+        const input = {
+          provider, endpoint, apiKey, customHeaders, model,
+          messages: [
+            { role: 'system', content: prompt || settings.merge_prompt || 'Merge these memories into one concise entry.' },
+            { role: 'user', content: memText },
+          ],
+          temperature: 0.2,
+          tools: [],
+          namespace: 'memory-merge',
+          requestId: crypto.randomUUID(),
+          routeName: 'memory-merge',
+        };
+        const llmResult = provider === 'anthropic'
+          ? await runAnthropic(input)
+          : await runOpenAiCompatible(input);
+        const merged = String(llmResult.text || '').trim();
         if (!merged) return res.json({ ok: false, error: 'Empty LLM response' });
 
         // Transaction: insert merged + delete originals
