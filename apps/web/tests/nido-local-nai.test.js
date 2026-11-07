@@ -98,3 +98,10 @@ test('chat context updates do not keep postponing Android proactive work', () =>
   assert.doesNotMatch(contextMethod[1], /scheduleNidoProactiveWork/);
   assert.match(native, /enqueueUniquePeriodicWork/);
 });
+
+test('NovelAI locked character presets override model guesses and work on older models', () => {
+  assert.match(studio, /const lockedCharacters = preset\?\.lockCharacters && presetChars\.length \? presetChars : null/);
+  assert.match(studio, /const characters = lockedCharacters \|\| requestedCharacters/);
+  assert.match(studio, /\.\.\.\(!isV4Model \? characters : \[\]\)/);
+  assert.match(studio, /if \(isV4Model\) \{/);
+});
