@@ -37,6 +37,15 @@ test('NovelAI requests are sent from Android and ZIP images are extracted native
   assert.match(native, /setInstanceFollowRedirects\(false\)/);
 });
 
+test('NAI image files remain available to older chat messages and ZIP errors keep HTTP diagnostics', () => {
+  assert.match(native, /Keep generated images for old chat attachments/);
+  assert.doesNotMatch(native, /existing\.length >= 200/);
+  assert.match(native, /result\.put\("status", responseStatus\)/);
+  assert.match(native, /Content-Type: /);
+  assert.match(native, /Content-Length: /);
+  assert.match(native, /已读取: /);
+});
+
 test('NAI prompt presets and generated images remain local', () => {
   assert.match(studio, /saveNidoImageConfig\(\);\s*imageStudio\.saveStatus = '画师预设已保存到本机/);
   assert.match(studio, /nido-nai-gallery-v1/);
