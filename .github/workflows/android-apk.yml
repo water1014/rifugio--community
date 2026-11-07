@@ -36,7 +36,7 @@ jobs:
           cache: npm
           cache-dependency-path: apps/api/package-lock.json
       - name: Install API dependencies
-        run: npm ci --prefix apps/api
+        run: npm ci --prefix apps/api --registry=https://registry.npmjs.org --replace-registry-host=always
       - name: Run API contract tests
         run: npm test --prefix apps/api
       - name: Build debug APK
