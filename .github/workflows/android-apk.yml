@@ -3,7 +3,6 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - feature/android-api-providers
       - feature/nido-android-rebuild
     paths:
       - 'android-shell/**'
