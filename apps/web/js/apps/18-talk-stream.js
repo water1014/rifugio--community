@@ -949,6 +949,7 @@ window.Rifugio.useTalkStream = function(ctx) {
                         json:async () => JSON.parse(body || '{}'),
                         nativeError:String(envelope.error || ''),
                         imageDataUrl:String(envelope.imageDataUrl || ''),
+                        imageDataUrls:Array.isArray(envelope.imageDataUrls) ? envelope.imageDataUrls.map(value => String(value || '')).filter(value => value.startsWith('data:image/')) : (envelope.imageDataUrl ? [String(envelope.imageDataUrl)] : []),
                     });
                 } catch (error) {
                     pending.reject(new Error('Android 网络桥返回了无法识别的数据'));
