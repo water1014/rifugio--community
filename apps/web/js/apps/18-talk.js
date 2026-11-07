@@ -1445,6 +1445,7 @@ window.Rifugio.useTalk = function(ctx) {
             window.addEventListener('refuge-authed', () => {
                 loadConvosFromDB();
                 loadTalkMomentsFromServer();
+                registerNidoNativePushToken();
             });
             const loadMoreTalkConvos = async () => {
                 if (talkVisibleConvoCount.value < talkSortedConvos.value.length) {
@@ -2205,7 +2206,46 @@ window.Rifugio.useTalk = function(ctx) {
                 talk.panel = '';
                 Vue.nextTick(() => document.querySelector('.talk-composer textarea')?.focus?.());
             };
+            const registerNidoNativePushToken = async (provided = {}) => {
+                try {
+                    const bridge = window.NidoNative;
+                    const token = String(provided.token || bridge?.getPushToken?.() || '').trim();
+                    const installationId = String(provided.installationId || bridge?.getInstallationId?.() || '').trim();
+                    if (!token || !installationId) return false;
+                    const response = await fetch('/api/push/android/register', {
+                        method:'POST',
+                        credentials:'include',
+                        headers:{ 'Content-Type':'application/json' },
+                        body:JSON.stringify({ token, installationId }),
+                    });
+                    return response.ok;
+                } catch (_) { return false; }
+            };
+            const handleNidoPushToken = event => registerNidoNativePushToken(event?.detail || {});
+            const handleNidoOpenConversation = async event => {
+                const id = String(event?.detail?.conversationId || '').trim();
+                if (!id) return;
+                let convo = talk.convos.find(item => String(item.id) === id);
+                if (!convo) {
+                    await loadConvosFromDB();
+                    convo = talk.convos.find(item => String(item.id) === id);
+                }
+                if (!convo) {
+                    try {
+                        const response = await fetch('/api/talk/convos/' + encodeURIComponent(id), { credentials:'include', cache:'no-store' });
+                        const result = await response.json();
+                        if (response.ok && result.ok && result.convo) {
+                            convo = normalizeTalkConvoMeta(result.convo);
+                            talk.convos.unshift(convo);
+                        }
+                    } catch (_) {}
+                }
+                if (convo) selectTalk(id);
+            };
             onMounted(() => {
+                window.addEventListener('nido:push-token', handleNidoPushToken);
+                window.addEventListener('nido:open-conversation', handleNidoOpenConversation);
+                registerNidoNativePushToken();
                 const syncTalkMonitor = () => {
                     const c = activeConvo.value;
                     if (!c || talk.appView !== 'chats' || talk.chatView !== 'chat') return;
@@ -2237,6 +2277,8 @@ window.Rifugio.useTalk = function(ctx) {
                 document.addEventListener('visibilitychange', talkVisibilityRefreshHandler);
             });
             onUnmounted(() => {
+                window.removeEventListener('nido:push-token', handleNidoPushToken);
+                window.removeEventListener('nido:open-conversation', handleNidoOpenConversation);
                 cancelTalkMessagePress();
                 try { revokeImageStudioObjectUrls(); } catch(_) {}
                 if (talkMonitorTimer) { clearInterval(talkMonitorTimer); talkMonitorTimer = null; }
