@@ -249,7 +249,7 @@ function createPushRoutes({ readJsonSetting, writeJsonSetting, isAuthed, encrypt
     let sent = 0, failed = 0;
     for (const sub of rows) {
       try {
-        await webPush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, body, { TTL: 3600, urgency: 'normal' });
+        await webPush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, body, { TTL: 3600, urgency: 'high' });
         sent += 1;
         alive.push(sub);
       } catch (e) {
@@ -286,12 +286,14 @@ function createPushRoutes({ readJsonSetting, writeJsonSetting, isAuthed, encrypt
     });
 
     app.post('/api/push/subscribe', (req, res) => {
+      if (!requireOwner(req, res)) return;
       const saved = upsertPushSubscription(req.body || {});
       if (!saved) return res.status(400).json({ ok: false, error: 'invalid push subscription' });
       res.json({ ok: true, id: saved.id, count: readPushSubscriptions().length });
     });
 
     app.delete('/api/push/subscribe', (req, res) => {
+      if (!requireOwner(req, res)) return;
       const endpoint = req.body?.endpoint || req.query.endpoint || '';
       res.json({ ok: true, removed: removePushSubscription(endpoint), count: readPushSubscriptions().length });
     });
