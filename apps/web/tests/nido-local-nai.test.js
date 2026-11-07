@@ -17,6 +17,8 @@ test('Nido Android uses local NovelAI configuration and encrypted key storage', 
   assert.match(studio, /nido-local-image-config-v1/);
   assert.match(studio, /saveNidoImageConfig/);
   assert.match(studio, /setSecret\('talk_nai_api_key'/);
+  assert.match(studio, /secretSaved = window\.NidoNative\.setSecret\('talk_nai_api_key', key\) === true/);
+  assert.match(studio, /NovelAI 密钥未能写入 Android 安全存储/);
   assert.match(studio, /loadImageConfig = async \(\) => \{\s*if \(imageStudio\.localMode\)/);
   assert.match(studio, /saveImageServer = async \(\) => \{\s*if \(imageStudio\.localMode\)/);
   assert.match(html, /:disabled="imageStudio\.localMode"/);
