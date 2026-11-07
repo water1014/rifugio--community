@@ -183,7 +183,7 @@ function createSettingsMemoryRoutes(ctx = {}) {
           const data = (payload.data || payload.models || []).map(item => ({
             id: item && (item.id || item.name || item.model),
           })).filter(item => item.id);
-          res.json({ ok: true, data, provider: resolvedProvider });
+          res.json({ ok: true, data });
         } else {
           const responseBody = await resp.text();
           res.json({ ok: false, error: `${resp.status}: ${responseBody.slice(0, 200)}` });
