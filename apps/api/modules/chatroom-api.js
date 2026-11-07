@@ -82,7 +82,7 @@ async function validatePublicBaseUrl(raw) {
 
 function providerFor(value, baseUrl, model) {
   const explicit = String(value || 'auto').toLowerCase();
-  if (['openai', 'anthropic', 'deepseek', 'compatible'].includes(explicit)) return explicit;
+  if (['openai', 'anthropic', 'deepseek', 'compatible', 'opencode-go'].includes(explicit)) return explicit;
   const hint = `${baseUrl || ''} ${model || ''}`.toLowerCase();
   if (hint.includes('anthropic.com') || /\bclaude[-_]/.test(hint)) return 'anthropic';
   if (hint.includes('deepseek.com') || /\bdeepseek[-_]/.test(hint)) return 'deepseek';
@@ -119,6 +119,22 @@ function normalizeCustomHeaders(value) {
   return headers;
 }
 
+
+function withOpenCodeSession(customHeaders, endpoint, namespace, model) {
+  const headers = { ...normalizeCustomHeaders(customHeaders) };
+  const url = new URL(endpoint);
+  if (url.hostname === 'opencode.ai' && /\/(?:zen\/go|inference\/go)\//i.test(url.pathname)) {
+    const hasSession = Object.keys(headers).some(name => name.toLowerCase() === 'x-opencode-session');
+    if (!hasSession) {
+      const digest = crypto.createHash('sha256')
+        .update([namespace || 'rifugio', model || ''].join('\\0'))
+        .digest('hex').slice(0, 24);
+      headers['x-opencode-session'] = 'ses_' + digest;
+    }
+  }
+  return headers;
+}
+
 function providerRequestHeaders(apiKey, customHeaders = {}, provider = 'compatible') {
   const defaults = provider === 'anthropic'
     ? { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }
@@ -128,6 +144,12 @@ function providerRequestHeaders(apiKey, customHeaders = {}, provider = 'compatib
 
 function endpointFor(baseUrl, provider) {
   const clean = String(baseUrl).replace(/\/+$/, '');
+  const parsed = new URL(clean);
+  if (parsed.hostname === 'opencode.ai') {
+    if (/\/zen\/go$/i.test(parsed.pathname)) return clean + '/v1/chat/completions';
+    if (/\/inference\/go$/i.test(parsed.pathname)) return clean + '/openai/v1/chat/completions';
+    if (/\/(?:zen\/go|inference\/go\/openai)\/v1$/i.test(parsed.pathname)) return clean + '/chat/completions';
+  }
   if (provider === 'anthropic') {
     if (/\/messages$/i.test(clean)) return clean;
     if (/\/models$/i.test(clean)) return clean.replace(/\/models$/i, '/messages');
@@ -140,6 +162,13 @@ function endpointFor(baseUrl, provider) {
 
 function modelsEndpointFor(baseUrl) {
   const clean = String(baseUrl).replace(/\/+$/, '');
+  const parsed = new URL(clean);
+  if (parsed.hostname === 'opencode.ai') {
+    if (/\/zen\/go$/i.test(parsed.pathname)) return clean + '/v1/models';
+    if (/\/inference\/go$/i.test(parsed.pathname)) return clean + '/v1/models';
+    if (/\/inference\/go\/openai\/v1$/i.test(parsed.pathname)) return clean.replace(/\/openai\/v1$/i, '/v1/models');
+    if (/\/zen\/go\/v1$/i.test(parsed.pathname)) return clean + '/models';
+  }
   if (/\/models$/i.test(clean)) return clean;
   if (/\/chat\/completions$/i.test(clean)) return clean.replace(/\/chat\/completions$/i, '/models');
   if (/\/messages$/i.test(clean)) return clean.replace(/\/messages$/i, '/models');
