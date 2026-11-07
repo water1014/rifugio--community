@@ -103,7 +103,7 @@
 
                 // 除“记忆 / 秘密”以外，其余子区全部提成独立 App
                 { id:'echi',      label:'回声', title:'Echoes · 回声', subtitle:'Pinned whispers', tab:'casa', sub:'echi', icon:'💌' },
-                { id:'log',       label:'轨迹', title:'Log · 轨迹', subtitle:'Claude export reader', tab:'casa', sub:'log', icon:'🗂️' },
+                { id:'log',       label:'轨迹', title:'Log · 轨迹', subtitle:'聊天记录导入与整理', tab:'casa', sub:'log', icon:'🗂️' },
                 { id:'posta',     label:'信箱', title:'Mail · 信箱', subtitle:'Inbox & archive', tab:'libreria', sub:'posta', icon:'✉️' },
                 { id:'diario',    label:'日记', title:'Diary · 日记', subtitle:'Private diary', tab:'libreria', sub:'diario', icon:'📓' },
                 { id:'aforismi',  label:'摘句', title:'Quotes · 摘句', subtitle:'Saved sentences', tab:'libreria', sub:'aforismi', icon:'📝' },
@@ -176,7 +176,7 @@
                 { id:'love', label:'每日情话', desc:'显示当前情话', glyph:'“', smart:true, size:'wide', template:'banner' },
                 { id:'day', label:'纪念日', desc:'填写日期后开始计天', glyph:'日', smart:true, size:'square', template:'calendar', date:relationshipStartDate },
                 { id:'memory', label:'记忆数量', desc:'自动读取记忆总数', glyph:'M', smart:true, size:'square', template:'note' },
-                { id:'quickChat', label:'快速对话', desc:'进入粉色 Claude Agent 聊天', glyph:'↗', smart:true, size:'wide', template:'banner' },
+                { id:'quickChat', label:'快速对话', desc:'进入 Nido 私人对话', glyph:'↗', smart:true, size:'wide', template:'banner' },
                 { id:'couple', label:'双人头像', desc:'紧凑双头像与相恋天数', glyph:'∞', smart:true, size:'wide', height:126, template:'couple', photos: samplePhotos.slice(0,2), text:'days together', date:relationshipStartDate },
                 { id:'writeHere', label:'写话输入框', desc:'毛玻璃长椭圆，主屏直接输入', glyph:'Aa', smart:true, size:'wide', width:60, height:32, template:'textInput', text:'' },
                 { id:'clockNow', label:'数字时钟', desc:'Top Widgets 风格时间卡', glyph:'09', smart:true, size:'square', template:'clock' },
@@ -1654,7 +1654,7 @@
                 try { localStorage.setItem(CHATROOM_PROFILE_LS, JSON.stringify({ userName:chatroomProfile.userName, userAvatar:chatroomProfile.userAvatar, userNote:chatroomProfile.userNote, showAvatar:chatroomProfile.showAvatar !== false })); } catch(_) {}
             };
             const chatroomPorts = reactive([
-                makeRoomPort('cc', 'CC', 'Claude Code / CC，像现场工程伙伴一样简洁、直接、能拆任务。', '', 'claude-code'),
+                makeRoomPort('cc', 'OpenCode Go', 'OpenCode Go，负责拆解问题、协作思考与补全方案。', '', 'opencode-go'),
                 makeRoomPort('gpt', 'GPT', 'GPT，擅长整理、解释、脑暴和温柔补全。', '', 'openai'),
                 makeRoomPort('deepseek', 'DeepSeek', 'DeepSeek，擅长推理、代码和结构化分析。', '', 'deepseek'),
             ]);
@@ -1671,27 +1671,39 @@
                 target.enabled = saved.enabled !== false;
                 target.split_regex = saved.split_regex || saved.splitRegex || target.split_regex || '(?<=。。)\\s*|(?<=\\.\\.)\\s*|(?<=[。！？!?~…])(?![。！？!?~…])\\s*';
             };
+            let migratedLegacyChatroomCc = false;
             try {
                 const savedPorts = JSON.parse(localStorage.getItem(CHATROOM_PORTS_LS) || '[]');
                 if (Array.isArray(savedPorts)) chatroomPorts.forEach(p => mergeRoomPort(p, savedPorts.find(x => x && x.id === p.id) || {}));
-                // CC 座位默认接家里的 claude CLI 转接层（/api/chatroom-cc/v1，同源 cookie 鉴权，无需 key）
                 const ccRoomPort = chatroomPorts.find(p => p.id === 'cc');
-                if (ccRoomPort && !ccRoomPort.base_url) { ccRoomPort.base_url = '/api/chatroom-cc/v1'; if (!ccRoomPort.model) ccRoomPort.model = 'claude-sonnet-5'; }
+                if (ccRoomPort) {
+                    const legacyClaudeRoute = /^\\/api\\/chatroom-cc\\/v1(?:\\/|$)/.test(String(ccRoomPort.base_url || ''));
+                    if (ccRoomPort.provider === 'claude-code' || legacyClaudeRoute) {
+                        ccRoomPort.provider = 'opencode-go';
+                        ccRoomPort.base_url = 'https://opencode.ai/zen/go';
+                        if (/^claude-/i.test(String(ccRoomPort.model || ''))) ccRoomPort.model = '';
+                        if (ccRoomPort.label === 'CC') ccRoomPort.label = 'OpenCode Go';
+                        migratedLegacyChatroomCc = true;
+                    }
+                    if (!ccRoomPort.base_url) ccRoomPort.base_url = 'https://opencode.ai/zen/go';
+                    if (/^claude-/i.test(String(ccRoomPort.model || ''))) ccRoomPort.model = '';
+                }
             } catch(_) {}
             const saveChatroomPorts = () => {
                 try {
-                    localStorage.setItem(CHATROOM_PORTS_LS, JSON.stringify(chatroomPorts.map(p => ({ id:p.id, label:p.label, persona:p.persona, avatar:p.avatar, base_url:p.base_url, api_key:p.api_key, model:p.model, provider:p.provider, rifugio_experience:p.rifugio_experience === true, enabled:p.enabled, split_regex:p.split_regex || '' }))));
+                    localStorage.setItem(CHATROOM_PORTS_LS, JSON.stringify(chatroomPorts.map(p => ({ id:p.id, label:p.label, persona:p.persona, avatar:p.avatar, base_url:p.base_url, api_key:p.api_key, custom_headers:p.custom_headers, model:p.model, provider:p.provider, rifugio_experience:p.rifugio_experience === true, enabled:p.enabled, split_regex:p.split_regex || '' }))));
                 } catch(_) {}
             };
+            if (migratedLegacyChatroomCc) saveChatroomPorts();
             const roomNow = () => new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
             const chatroom = reactive({
                 roomName:'群聊',
-                announcement:'欢迎进入群聊。这里可以让 CC、GPT、DeepSeek 和你一起说话，也可以玩真心话大冒险 / 下棋。',
+                announcement:'欢迎进入群聊。这里可以让 OpenCode Go、GPT、DeepSeek 和你一起说话，也可以玩真心话大冒险 / 下棋。',
                 announcementDraft:'', input:'', status:'', thinking:false, toolsOpen:false,
                 game:'truth', gamePrompt:'', chessSelected:null,
                 stickerDraft:'', stickerImportCategory:'聊天室', stickerSearch:'', attachments:[],
                 customCss:'', cssStatus:'',
-                messages:[{ id:'room-welcome', speaker:'系统公告', role:'system', text:'群聊已就绪。先去设置 App 的“聊天室 API”填三个 OpenAI-compatible 端口，再回来发消息。', time:roomNow() }]
+                messages:[{ id:'room-welcome', speaker:'系统公告', role:'system', text:'群聊已就绪。先去设置 App 的“聊天室 API”配置 OpenCode Go、GPT 或 DeepSeek，再回来发消息。', time:roomNow() }]
             });
             const roomAttachmentUrl = (a) => a?.dataUrl || a?.url || a?.image || '';
             const roomStickerTokenPattern = /\[\[sticker:([^\]\n]{1,80})\]\]/gi;
