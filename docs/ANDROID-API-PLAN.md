@@ -68,8 +68,18 @@ The Android/Rifugio setup must support all three user-requested routes:
 
 ## Not yet complete
 
-- The Android shell is not a bundled/offline Rifugio app. It requires an HTTPS deployment of the web/API server.
-- The APK has not yet passed a successful build; the first CI attempt failed because the Android SDK setup action tried to install the retired `tools` package. The workflow was updated to install explicit SDK packages and is being rechecked.
+- The Android app is currently a WebView shell, not a fully bundled/offline native app. It still requires an HTTPS deployment of the web/API server and the first-run setup screen still asks the user to enter that server URL. This conflicts with the final product requirement and must be removed by supplying a stable, preconfigured service endpoint.
+- A debug APK build has now succeeded in GitHub Actions run `42359545224` (commit `40853b12875ee5e8acb108cc16791a8c1c77e5ea`). The `nido-android-debug-apk` artifact was uploaded (4,402,987 bytes; 14-day retention at upload time). This proves CI compilation and packaging only, not runtime readiness or release signing.
 - Custom headers and the OpenCode Go preset are currently wired into the chatroom/talk shared provider proxy. Memory import, pet AI, image, voice, and other feature-specific API routes still need separate review and alignment.
 - DeepSeek official and generic OpenAI-compatible chatroom calls use the existing shared proxy, but a full end-to-end live test with user credentials has not been run.
-- The app has not been deployed to a server or installed on a physical Android device.
+- Native notification plumbing now exists in the Android source: notification permission/channel, FCM message service, UnifiedPush service, notification intents carrying conversation/message IDs, and backend Android-token registration plus FCM send support. However, no Firebase project configuration/service account has been supplied, FCM is therefore inactive in the current APK, UnifiedPush distributor registration and delivery have not been tested on a physical phone, and click-through navigation has not been device-verified.
+- UnifiedPush support is not yet proof of reliable background delivery on every Android device. A compatible distributor must be installed/configured, and vendor battery restrictions may still affect delivery.
+- The app has not been deployed to a server or installed on a physical Android device. The APK application ID remains `app.rifugio.shell`; changing it now could break upgrade continuity and should be treated as a deliberate migration.
+
+
+## Latest verified CI and remaining product blockers
+
+- Latest verified workflow run: `42359545224`, success. API contract tests, web tests, Gradle `assembleDebug`, and artifact upload all succeeded.
+- Artifact: `nido-android-debug-apk`, 4.4 MB, expires 2026-11-21 based on the upload metadata.
+- This is a debug validation artifact, not a release APK and not a user-ready app.
+- Highest-priority next work: remove manual server URL setup by configuring a stable HTTPS service origin; deploy and harden the backend; finish provider alignment for every AI feature; wire device registration from the Android bridge to authenticated API calls; configure a real push delivery path; and run installation, process-death, background delivery, notification tap, and upgrade/data-retention tests on a physical Android device.
