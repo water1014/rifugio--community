@@ -1,31 +1,32 @@
-# Nido Android app (development shell)
+# Nido Android app
 
-The Android application is branded **Nido**. This directory currently contains an early WebView shell only; it is not yet the finished daily-use Android app.
+Nido is a **standalone, local-first Android app**. It does not require a self-hosted Rifugio backend, VPS, domain, Docker, or account server.
 
-## Current prototype behavior
+## How it works
 
-- Opens a local first-run setup page.
-- Requires a deployed HTTPS Rifugio backend URL.
-- Stores that URL in Android private preferences and loads the remote web app.
-- Does not bundle the backend or provide offline operation.
+- The complete web UI is bundled into the APK and loaded from Android's local WebViewAssetLoader origin.
+- Chat requests go directly from Android to the API provider selected by the user. OpenCode Go, DeepSeek, and OpenAI-compatible providers use the Android native HTTPS bridge, avoiding WebView CORS limitations.
+- NovelAI image generation also goes directly from Android to the selected NovelAI endpoint. Generated images are stored in app-private storage.
+- Chat history and app settings stay on the device (IndexedDB / localStorage). Provider secrets are stored using Android Keystore-backed encrypted preferences.
+- Proactive messages can run locally through Android WorkManager and the configured text API. Android notifications are generated on-device.
+- Internet access is needed for AI provider requests, but **there is no Nido-owned backend to deploy or pay for**.
+
+## What does not require a server
+
+Chat, local conversation history, local memories/settings, NovelAI generation, and scheduled proactive messages are designed to work without a Nido backend.
+
+Server-dependent community features such as account login, cross-device sync, cloud backup, and remote push-distributor registration are not part of the standalone Android flow. Local notifications do not require those services.
 
 ## Build
 
-The repository workflow `.github/workflows/android-apk.yml` builds a debug APK on pushes to `feature/android-api-providers` that touch the Android project or relevant web/API code, or when manually dispatched.
+The workflow .github/workflows/android-apk.yml validates the complete Vue template, web scripts, and tests before building a debug APK on pushes to feature/android-api-providers.
 
-After a successful run, open the workflow run's **Artifacts** section and download `nido-android-debug-apk`. The APK is unsigned with a release keystore and is for development testing only.
+After a successful run, open the workflow's **Artifacts** section and download nido-android-debug-apk.
 
-## Product requirements still to implement
+The debug APK is for testing only. A daily-use release must be signed with a stable private release key. Keep the same signing key for future upgrades so Android can update the app without uninstalling it or clearing local data.
 
-- A real Android app experience, not a URL-entry WebView wrapper.
-- Native notification permission handling and a high-importance Nido message channel are now scaffolded.
-- UnifiedPush 3.3.5 connector is included as the primary cross-vendor Android transport. It lets the user select an installed push distributor, stores the Web Push endpoint/keys locally, and reuses the server's existing VAPID/Web Push sender.
-- The native push service decrypts incoming UnifiedPush payloads, posts a high-importance Android notification, and routes taps to the correct Talk conversation.
-- The Talk settings include an explicit “开启后台推送” action. After distributor registration, the app uploads the endpoint to the authenticated backend.
-- FCM HTTP v1 remains an optional secondary transport for devices with Google Play services. It requires `android-shell/app/google-services.json` at build time and `FCM_SERVICE_ACCOUNT_JSON` (raw or base64 JSON) on the server. No Firebase credentials belong in Git.
-- Devices without Google Play services can use UnifiedPush, but need a compatible distributor app installed and configured. A push distributor is a separate Android app; Nido cannot promise background delivery until a distributor is registered.
-- Durable local data and non-destructive app upgrades.
-- No dependency on a Claude subscription. Provider support must be audited feature by feature.
-- No API credentials embedded in the APK.
+## Privacy and storage
 
-The existing application ID `app.rifugio.shell` is retained for upgrade continuity while the product is developed. The FCM SDK is optional at runtime until Firebase is configured, so the app still builds without project-specific credentials. UnifiedPush works through a separately installed distributor and does not require Google Play services. A release APK will require a stable private signing key.
+- API keys are not embedded in the APK or sent to a Nido server.
+- Do not uninstall the app when updating unless you have exported/backed up anything important.
+- Android may stop background work under battery restrictions; proactive message timing is therefore best-effort and subject to the OS.
