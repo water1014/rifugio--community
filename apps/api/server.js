@@ -39,8 +39,6 @@ const { mountUploadRoutes } = require('./modules/upload-routes');
 const { ensureCoreSchema, ensureSettingsSchema, runMigrations, runChatMigrations, addDehydratedColumn } = require('./modules/db-startup');
 const { createSecretCrypto } = require('./modules/secret-crypto');
 const { createClaudeRuntime } = require('./modules/claude-runtime');
-const pushRoutes = createPushRoutes({ readJsonSetting, writeJsonSetting });
-const { sendWebPushNotification } = pushRoutes;
 
 // 确保各库 schema（必须在 bucket/auth 初始化之前）
 ensureCoreSchema(MEMORY_DB_PATH);
@@ -63,6 +61,8 @@ mountSpicyMonopolyRoutes(app);
 const { mountPetRoutes } = require('./modules/pet');
 mountPetRoutes(app);
 const { maskKey, encrypt, decrypt } = createSecretCrypto({ isProd: IS_PROD });
+const pushRoutes = createPushRoutes({ readJsonSetting, writeJsonSetting, isAuthed, encrypt, decrypt });
+const { sendWebPushNotification, sendAndroidPushNotification } = pushRoutes;
 const { mountPetAiRoutes } = require('./modules/pet-ai');
 mountPetAiRoutes(app, { DB_PATH: MEMORY_DB_PATH, maskKey, encrypt, decrypt, clientIp });
 
@@ -118,6 +118,7 @@ const talkProactive = createTalkProactive({
   writeJsonSetting,
   sanitizeTalkMessages: value => sanitizeTalkMessages(value),
   sendWebPushNotification,
+  sendAndroidPushNotification,
   maskKey,
   encrypt,
   decrypt,
