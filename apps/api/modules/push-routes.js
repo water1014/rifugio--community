@@ -170,11 +170,33 @@ function createPushRoutes({ readJsonSetting, writeJsonSetting, isAuthed, encrypt
 
   function readPushSubscriptions() {
     const rows = readJsonSetting(PUSH_SUBSCRIPTIONS_KEY, []);
-    return Array.isArray(rows) ? rows.filter(s => s && s.endpoint) : [];
+    if (!Array.isArray(rows)) return [];
+    return rows.map(row => {
+      if (!row || typeof row !== 'object') return null;
+      if (!row.dataEnc) return row.endpoint ? row : null; // legacy plaintext row, migrated on next write
+      try {
+        const data = JSON.parse(decrypt(row.dataEnc));
+        return { ...row, ...data };
+      } catch (_) { return null; }
+    }).filter(row => row && row.endpoint && row.keys);
   }
 
   function writePushSubscriptions(rows) {
-    writeJsonSetting(PUSH_SUBSCRIPTIONS_KEY, (Array.isArray(rows) ? rows : []).filter(s => s && s.endpoint).slice(-80));
+    const valid = (Array.isArray(rows) ? rows : []).filter(row => row && row.endpoint && row.keys).slice(-80);
+    const stored = typeof encrypt === 'function'
+      ? valid.map(row => {
+          const data = {
+            endpoint: row.endpoint,
+            expirationTime: row.expirationTime || null,
+            keys: row.keys,
+            userAgent: row.userAgent || '',
+            platform: row.platform || '',
+            updatedAt: row.updatedAt || new Date().toISOString(),
+          };
+          return { id: row.id || crypto.createHash('sha256').update(row.endpoint).digest('hex').slice(0, 24), dataEnc: encrypt(JSON.stringify(data)) };
+        })
+      : valid;
+    writeJsonSetting(PUSH_SUBSCRIPTIONS_KEY, stored);
   }
 
   function normalizePushSubscription(input = {}) {
@@ -202,9 +224,20 @@ function createPushRoutes({ readJsonSetting, writeJsonSetting, isAuthed, encrypt
     const envPrivate = String(process.env.WEB_PUSH_PRIVATE_KEY || '').trim();
     if (envPublic && envPrivate) return { publicKey: envPublic, privateKey: envPrivate, source: 'env' };
     const stored = readJsonSetting(PUSH_VAPID_KEYS_KEY, null);
-    if (stored?.publicKey && stored?.privateKey) return { ...stored, source: 'stored' };
+    if (stored?.publicKey && (stored?.privateKeyEnc || stored?.privateKey)) {
+      let privateKey = '';
+      try { privateKey = stored.privateKeyEnc ? decrypt(stored.privateKeyEnc) : stored.privateKey; } catch (_) {}
+      if (privateKey) {
+        if (!stored.privateKeyEnc && typeof encrypt === 'function') {
+          writeJsonSetting(PUSH_VAPID_KEYS_KEY, { publicKey:stored.publicKey, privateKeyEnc:encrypt(privateKey) });
+        }
+        return { publicKey:stored.publicKey, privateKey, source:'stored' };
+      }
+    }
     const generated = webPush.generateVAPIDKeys();
-    writeJsonSetting(PUSH_VAPID_KEYS_KEY, generated);
+    writeJsonSetting(PUSH_VAPID_KEYS_KEY, typeof encrypt === 'function'
+      ? { publicKey:generated.publicKey, privateKeyEnc:encrypt(generated.privateKey) }
+      : generated);
     return { ...generated, source: 'generated' };
   }
 
