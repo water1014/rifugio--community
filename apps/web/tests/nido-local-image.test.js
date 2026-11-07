@@ -19,12 +19,12 @@ test('Nido local image generation uses NovelAI directly without the app backend'
   assert.match(image, /talkSettings\.imageProvider = 'novelai'/);
 });
 
-test('native NAI ZIP response is decoded and forwarded as data URLs', () => {
+test('native NAI ZIP response is decoded into persistent local image URLs', () => {
   assert.match(native, /extractNaiImages\(response\)/);
-  assert.match(native, /result\.put\("imageDataUrls", images\)/);
-  assert.match(stream, /imageDataUrls:Array\.isArray\(envelope\.imageDataUrls\)/);
+  assert.match(native, /result\.put\("imageUrls", urls\)/);
+  assert.match(stream, /imageUrls:Array\.isArray\(envelope\.imageUrls\)/);
   assert.match(stream, /imageDataUrl:String\(envelope\.imageDataUrl \|\| ''\)/);
-  assert.match(image, /response\.imageDataUrls/);
+  assert.match(image, /response\.imageUrls/);
 });
 
 test('local image settings and gallery restore without server calls', () => {
