@@ -656,21 +656,62 @@ window.Rifugio.useTalk = function(ctx) {
                 const requestId = kind === 'tts' ? ++ttsFetchRequestId : 0;
                 const providerAtStart = kind === 'tts' ? normalizeTtsProvider(talkSettings.ttsProvider) : '';
                 try {
-                    const endpoint = isTextModels ? '/api/talk-api/v1/models' : '/api/integrations/models';
-                    const res = await fetch(endpoint, {
-                        method:'POST',
-                        headers:{ 'Content-Type':'application/json' },
-                        credentials:'include',
-                        body:JSON.stringify(kind === 'tts' ? buildTtsModelRequest() : {
-                            kind,
-                            provider: kind === 'image' ? talkSettings.imageProvider : (isTextModels ? talkSettings.apiProtocol : talkSettings.provider),
-                            base_url: kind === 'image' ? normalizeImageBaseUrl(talkSettings.imageBaseUrl, talkSettings.imageProvider) : talkSettings.baseUrl,
-                            api_key: kind === 'image' ? talkSettings.naiApiKey : talkSettings.apiKey,
-                            custom_headers: isTextModels ? talkSettings.customHeaders : undefined,
-                        }),
-                    });
-                    const data = await res.json().catch(() => ({}));
-                    if (!res.ok || data.ok === false) throw new Error(data.error?.message || data.error || ('HTTP ' + res.status));
+                    if (isNidoLocalApp() && !isTextModels) {
+                        talkSettings[statusKey] = '本地版正在逐项接入此服务，暂时不能从 Nido 后端拉取。';
+                        return;
+                    }
+                    let res;
+                    let data = {};
+                    if (isTextModels && window.NidoNative?.getJson && window.NidoNativeHttp?.getJson) {
+                        const clean = String(talkSettings.baseUrl || '').trim().replace(/\/+$/, '');
+                        const parsed = new URL(clean);
+                        let endpoint = clean;
+                        if (parsed.hostname.toLowerCase() === 'opencode.ai') {
+                            if (/\/zen\/go$/i.test(parsed.pathname) || /\/inference\/go$/i.test(parsed.pathname)) endpoint = clean + '/v1/models';
+                            else if (/\/inference\/go\/openai\/v1$/i.test(parsed.pathname)) endpoint = clean.replace(/\/openai\/v1$/i, '/v1/models');
+                            else if (/\/zen\/go\/v1$/i.test(parsed.pathname)) endpoint = clean + '/models';
+                        } else if (/\/chat\/completions$/i.test(clean)) endpoint = clean.replace(/\/chat\/completions$/i, '/models');
+                        else if (!/\/models$/i.test(clean)) endpoint = clean + '/models';
+                        const headers = { Accept:'application/json', Authorization:'Bearer ' + String(talkSettings.apiKey || '').trim() };
+                        let custom = {};
+                        if (String(talkSettings.customHeaders || '').trim()) {
+                            custom = JSON.parse(talkSettings.customHeaders);
+                            if (!custom || typeof custom !== 'object' || Array.isArray(custom)) throw new Error('自定义请求头必须是 JSON 对象');
+                        }
+                        Object.entries(custom).forEach(([name, value]) => {
+                            if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,80}$/.test(name) || /[\r\n]/.test(String(value))) return;
+                            const old = Object.keys(headers).find(key => key.toLowerCase() === name.toLowerCase());
+                            if (old) delete headers[old];
+                            headers[name] = String(value);
+                        });
+                        if (talkSettings.apiProtocol === 'opencode-go') {
+                            let session = localStorage.getItem('nido-opencode-session') || '';
+                            if (!session) {
+                                session = 'ses_' + (window.crypto?.randomUUID?.().replace(/-/g, '').slice(0, 24) || (Date.now().toString(36) + Math.random().toString(36).slice(2, 14)));
+                                localStorage.setItem('nido-opencode-session', session);
+                            }
+                            if (!Object.keys(headers).some(key => key.toLowerCase() === 'x-opencode-session')) headers['x-opencode-session'] = session;
+                            if (!Object.keys(headers).some(key => key.toLowerCase() === 'user-agent')) headers['User-Agent'] = 'Nido/Android';
+                        }
+                        res = await window.NidoNativeHttp.getJson(endpoint, headers);
+                        data = await res.json().catch(() => ({}));
+                    } else {
+                        const endpoint = isTextModels ? '/api/talk-api/v1/models' : '/api/integrations/models';
+                        res = await fetch(endpoint, {
+                            method:'POST',
+                            headers:{ 'Content-Type':'application/json' },
+                            credentials:'include',
+                            body:JSON.stringify(kind === 'tts' ? buildTtsModelRequest() : {
+                                kind,
+                                provider: kind === 'image' ? talkSettings.imageProvider : (isTextModels ? talkSettings.apiProtocol : talkSettings.provider),
+                                base_url: kind === 'image' ? normalizeImageBaseUrl(talkSettings.imageBaseUrl, talkSettings.imageProvider) : talkSettings.baseUrl,
+                                api_key: kind === 'image' ? talkSettings.naiApiKey : talkSettings.apiKey,
+                                custom_headers: isTextModels ? talkSettings.customHeaders : undefined,
+                            }),
+                        });
+                        data = await res.json().catch(() => ({}));
+                    }
+                    if (!res.ok || data.ok === false) throw new Error(data.error?.message || data.error || res.nativeError || ('HTTP ' + res.status));
                     if (kind === 'tts' && (requestId !== ttsFetchRequestId || providerAtStart !== normalizeTtsProvider(talkSettings.ttsProvider))) return;
                     const models = isTextModels
                         ? (Array.isArray(data.data) ? data.data : (data.models || []))
