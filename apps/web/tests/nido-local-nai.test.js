@@ -87,7 +87,7 @@ test('Android proactive worker receives fresh context after chat saves', () => {
   assert.match(talk, /syncNidoProactiveContext\(current\)/);
   assert.match(talk, /}, 700\);/);
   assert.match(native, /setProactiveContext\(String rawContext\)/);
-  assert.ok(native.includes('scheduleNidoProactiveWork(config.optBoolean(\'enabled\', false)'));
+  assert.ok(native.includes('scheduleNidoProactiveWork(config.optBoolean("enabled", false)'));
 });
 
 test('chat context updates do not keep postponing Android proactive work', () => {
