@@ -1446,6 +1446,7 @@ window.Rifugio.useTalk = function(ctx) {
                 loadConvosFromDB();
                 loadTalkMomentsFromServer();
                 registerNidoNativePushToken();
+                registerNidoUnifiedPushSubscription();
             });
             const loadMoreTalkConvos = async () => {
                 if (talkVisibleConvoCount.value < talkSortedConvos.value.length) {
@@ -2206,9 +2207,63 @@ window.Rifugio.useTalk = function(ctx) {
                 talk.panel = '';
                 Vue.nextTick(() => document.querySelector('.talk-composer textarea')?.focus?.());
             };
+            const registerNidoUnifiedPushSubscription = async (provided = null) => {
+                try {
+                    const bridge = window.NidoNative;
+                    let subscription = provided;
+                    if (!subscription && bridge?.getUnifiedPushSubscription) {
+                        const raw = bridge.getUnifiedPushSubscription();
+                        if (raw) subscription = JSON.parse(raw);
+                    }
+                    if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) return false;
+                    const response = await fetch('/api/push/subscribe', {
+                        method:'POST',
+                        credentials:'include',
+                        headers:{ 'Content-Type':'application/json' },
+                        body:JSON.stringify({ subscription, platform:'android-native-unifiedpush', userAgent:'Nido Android' }),
+                    });
+                    if (response.ok) {
+                        try { localStorage.setItem('nido-unified-push-endpoint', subscription.endpoint); } catch (_) {}
+                        const installationId = String(bridge?.getInstallationId?.() || '').trim();
+                        if (installationId) {
+                            fetch('/api/push/android/register', {
+                                method:'DELETE',
+                                credentials:'include',
+                                headers:{ 'Content-Type':'application/json' },
+                                body:JSON.stringify({ installationId }),
+                            }).catch(() => {});
+                        }
+                    }
+                    return response.ok;
+                } catch (_) { return false; }
+            };
+            const handleNidoPushSubscription = async event => {
+                const detail = event?.detail || {};
+                if (detail.removed) {
+                    try {
+                        const endpoint = localStorage.getItem('nido-unified-push-endpoint') || '';
+                        if (endpoint) {
+                            await fetch('/api/push/subscribe', {
+                                method:'DELETE',
+                                credentials:'include',
+                                headers:{ 'Content-Type':'application/json' },
+                                body:JSON.stringify({ endpoint }),
+                            });
+                        }
+                        localStorage.removeItem('nido-unified-push-endpoint');
+                    } catch (_) {}
+                    return;
+                }
+                await registerNidoUnifiedPushSubscription(detail);
+            };
             const registerNidoNativePushToken = async (provided = {}) => {
                 try {
                     const bridge = window.NidoNative;
+                    const unifiedRaw = bridge?.getUnifiedPushSubscription?.() || '';
+                    if (unifiedRaw) {
+                        await registerNidoUnifiedPushSubscription(JSON.parse(unifiedRaw));
+                        return true;
+                    }
                     const token = String(provided.token || bridge?.getPushToken?.() || '').trim();
                     const installationId = String(provided.installationId || bridge?.getInstallationId?.() || '').trim();
                     if (!token || !installationId) return false;
@@ -2222,6 +2277,21 @@ window.Rifugio.useTalk = function(ctx) {
                 } catch (_) { return false; }
             };
             const handleNidoPushToken = event => registerNidoNativePushToken(event?.detail || {});
+            const enableNidoNativePush = async () => {
+                try {
+                    if (!window.NidoNative?.enableUnifiedPush) {
+                        talkSettings.webPushStatus = '请在 Nido Android App 中使用原生通知功能。';
+                        return;
+                    }
+                    const response = await fetch('/api/push/vapid-public-key', { credentials:'include', cache:'no-store' });
+                    const result = await response.json();
+                    if (!response.ok || !result.ok || !result.publicKey) throw new Error('服务器尚未准备好 Web Push 公钥');
+                    window.NidoNative.enableUnifiedPush(result.publicKey);
+                    talkSettings.webPushStatus = '已请求系统选择通知分发器；连接成功后会自动登记设备。';
+                } catch (error) {
+                    talkSettings.webPushStatus = error?.message || '暂时无法开启原生通知。';
+                }
+            };
             const handleNidoOpenConversation = async event => {
                 const id = String(event?.detail?.conversationId || '').trim();
                 if (!id) return;
@@ -2244,7 +2314,9 @@ window.Rifugio.useTalk = function(ctx) {
             };
             onMounted(() => {
                 window.addEventListener('nido:push-token', handleNidoPushToken);
+                window.addEventListener('nido:push-subscription', handleNidoPushSubscription);
                 window.addEventListener('nido:open-conversation', handleNidoOpenConversation);
+                registerNidoUnifiedPushSubscription();
                 registerNidoNativePushToken();
                 const syncTalkMonitor = () => {
                     const c = activeConvo.value;
@@ -2278,6 +2350,7 @@ window.Rifugio.useTalk = function(ctx) {
             });
             onUnmounted(() => {
                 window.removeEventListener('nido:push-token', handleNidoPushToken);
+                window.removeEventListener('nido:push-subscription', handleNidoPushSubscription);
                 window.removeEventListener('nido:open-conversation', handleNidoOpenConversation);
                 cancelTalkMessagePress();
                 try { revokeImageStudioObjectUrls(); } catch(_) {}
@@ -2295,6 +2368,6 @@ window.Rifugio.useTalk = function(ctx) {
             Vue.watch(() => subTabs.museo, (v) => { if (v === 'talk') scrollTalkBottom(); });
 
 
-        return { TALK_LS, TALK_SETTINGS_LS, TALK_MOMENTS_LS, TALK_MODELS, TALK_IMESSAGE_CUSTOM_CSS_PRESET, TALK_COMPANION_CUSTOM_CSS_PRESET, TALK_CUSTOM_CSS_PLACEHOLDER, talk, terminalResume, talkSettings, stripBundledTalkPresetCss, strippedCustomCss, normalizeTalkTheme, normalizeTalkModel, talkScroll, TALK_VISIBLE_BATCH, talkVisibleMsgCount, talkVisibleConvoCount, talkProfile, saveTalkProfile, talkAiDisplayName, onTalkApiProtocolChange, profileCardsRef, profileCardIndex, relationshipDaysText, toggleProfileCardEdit, scrollProfileCard, onProfileCardsScroll, uploadTalkProfileImage, saveTalkSettings, clampNumber, clampInt, scopeTalkCustomCss, applyTalkCustomCss, insertTalkImessageCssPreset, insertTalkClaudeCssPreset, applyGlobalFont, ttsFetchRequestId, fetchProviderModels, talkToast, talkMomentsSyncTimer, talkMomentsLoading, queueTalkMomentsSync, loadTalkMomentsFromServer, normalizeTalkConvoMeta, makeTalkMomentId, normalizeTalkMomentForStorage, talkMomentsStoragePayload, writeTalkMomentsLocal, talkMomentSortTime, talkMomentUpdateTime, mergeTalkMoments, saveTalk, syncTalkMomentsToServer, activeConvo, talkConvoTitle, talkSortedConvos, talkVisibleConvos, talkConvosNeedMore, talkConvoRenderSummary, normalizeTalkGroupName, rememberTalkGroupName, talkGroupNames, talkGroupedConvos, toggleTalkConvoGroup, appendTalkSystemMessage, talkDisplayedMsgs, talkHasMore, loadMoreTalkMessages, talkMessageFontStyle, talkChatDetailStyle, talkMonitorTimer, talkProactiveTimer, talkServiceWorkerRegistration, talkServiceWorkerBound, talkProactivePollTimer, talkProactiveEventCursor, scrollTalkBottom, onTalkScrollTop, nowHM, nowForModel, imageUrlPattern, attachmentUrl, attachmentAudioUrl, normalAttachments, pokeTokenPattern, extractPokeRefs, stripPokeTokens, loosePokeText, generatedImagePattern, extractGeneratedImages, voiceTagPattern, toolUseMarkerPattern, stripToolUseMarkers, sanitizeTalkMessage, sanitizeTalkConvo, cleanMessageContent, extractVoiceTags, prepareTtsInput, cleanForTts, imageUrlPatternG, messageSegments, talkMessageSegments, talkMessagePokeSegments, talkMessageBodySegments, talkMessageSocialCards, socialLinksFromText, socialShareCopyFromText, socialPlaceholder, hydrateSocialCards, stripSocialLinksForDisplay, socialCardsPrompt, talkMessagePokeOnly, talkPokeSystemText, describeAttachmentForModel, messageContentForModel, promptWithAttachments, shouldSendAttachmentImage, attachmentPayloadForModel, buildTalkContext, buildTalkCharacterPrompt, talkLastMessage, talkLastTime, openTalkSection, backToTalkList, returnToTalkHome, openActiveTalk, openTalkSessionTools, TALK_TAIL_SYNC_COUNT, convoMetaPayload, pushConvo, pushConvoFull, pushConvoMeta, ensureConvoComplete, safePushConvoFull, convoMsgAbort, loadConvoMessages, refreshTalkMessages, loadConvosFromDB, loadMoreTalkConvos, onTalkConvoListScroll, newTalk, selectTalk, deleteTalk, renameTalk, renameTalkRemark, createTalkConvoGroup, moveTalkConvoToGroup, setTalkConvoGroup, toggleTalkPin, renameTalkConvoGroup, startTalkConvoDrag, endTalkConvoDrag, dropTalkConvoToGroup, onModelChange, countTalkUserTurns, buildTalkHandoffSummary, copyText, copyTalkSession, generateTalkHandoff, startNewClaudeSessionNextTurn, continueTalkInTerminal, terminalResumeCommand, copyTerminalResumeCommand, writeTerminalHandoff, sendTerminalShortcut, lastTalkEnterAt, lastTalkEnterPos, autoGrowTalk, handleTalkEnter, addTalkAttachment, onTalkImageSelect, removeTalkAttachment, uploadTalkAvatar, uploadVirtualCameraImage, togglePhoneInspect, requestPhoneInspectFromAi, rejectPhoneInspectRequest, acceptPhoneInspectRequest, captureStreamFrame, stopPhoneInspectShare, playTalkNotification, pushBase64ToUint8Array, ensureTalkWebPushSubscription, disableTalkWebPushSubscription, requestTalkNotificationPermission, handleTalkServiceWorkerMessage, registerTalkServiceWorker, postTalkServiceWorker, syncTalkServiceWorkerProactive, sendTalkExternalNotification, testTalkWebPush, showTalkToast, jumpToTalkToast, scheduleTalkProactive, syncTalkProactiveSettingsToServer, pollTalkProactiveEvents, triggerTalkProactive, pendingPokePayload, clearPendingPoke, sendTalk, postTalkActivity, pokeClaude };
+        return { TALK_LS, TALK_SETTINGS_LS, TALK_MOMENTS_LS, TALK_MODELS, TALK_IMESSAGE_CUSTOM_CSS_PRESET, TALK_COMPANION_CUSTOM_CSS_PRESET, TALK_CUSTOM_CSS_PLACEHOLDER, talk, terminalResume, talkSettings, stripBundledTalkPresetCss, strippedCustomCss, normalizeTalkTheme, normalizeTalkModel, talkScroll, TALK_VISIBLE_BATCH, talkVisibleMsgCount, talkVisibleConvoCount, talkProfile, saveTalkProfile, talkAiDisplayName, onTalkApiProtocolChange, profileCardsRef, profileCardIndex, relationshipDaysText, toggleProfileCardEdit, scrollProfileCard, onProfileCardsScroll, uploadTalkProfileImage, saveTalkSettings, clampNumber, clampInt, scopeTalkCustomCss, applyTalkCustomCss, insertTalkImessageCssPreset, insertTalkClaudeCssPreset, applyGlobalFont, ttsFetchRequestId, fetchProviderModels, talkToast, talkMomentsSyncTimer, talkMomentsLoading, queueTalkMomentsSync, loadTalkMomentsFromServer, normalizeTalkConvoMeta, makeTalkMomentId, normalizeTalkMomentForStorage, talkMomentsStoragePayload, writeTalkMomentsLocal, talkMomentSortTime, talkMomentUpdateTime, mergeTalkMoments, saveTalk, syncTalkMomentsToServer, activeConvo, talkConvoTitle, talkSortedConvos, talkVisibleConvos, talkConvosNeedMore, talkConvoRenderSummary, normalizeTalkGroupName, rememberTalkGroupName, talkGroupNames, talkGroupedConvos, toggleTalkConvoGroup, appendTalkSystemMessage, talkDisplayedMsgs, talkHasMore, loadMoreTalkMessages, talkMessageFontStyle, talkChatDetailStyle, talkMonitorTimer, talkProactiveTimer, talkServiceWorkerRegistration, talkServiceWorkerBound, talkProactivePollTimer, talkProactiveEventCursor, scrollTalkBottom, onTalkScrollTop, nowHM, nowForModel, imageUrlPattern, attachmentUrl, attachmentAudioUrl, normalAttachments, pokeTokenPattern, extractPokeRefs, stripPokeTokens, loosePokeText, generatedImagePattern, extractGeneratedImages, voiceTagPattern, toolUseMarkerPattern, stripToolUseMarkers, sanitizeTalkMessage, sanitizeTalkConvo, cleanMessageContent, extractVoiceTags, prepareTtsInput, cleanForTts, imageUrlPatternG, messageSegments, talkMessageSegments, talkMessagePokeSegments, talkMessageBodySegments, talkMessageSocialCards, socialLinksFromText, socialShareCopyFromText, socialPlaceholder, hydrateSocialCards, stripSocialLinksForDisplay, socialCardsPrompt, talkMessagePokeOnly, talkPokeSystemText, describeAttachmentForModel, messageContentForModel, promptWithAttachments, shouldSendAttachmentImage, attachmentPayloadForModel, buildTalkContext, buildTalkCharacterPrompt, talkLastMessage, talkLastTime, openTalkSection, backToTalkList, returnToTalkHome, openActiveTalk, openTalkSessionTools, TALK_TAIL_SYNC_COUNT, convoMetaPayload, pushConvo, pushConvoFull, pushConvoMeta, ensureConvoComplete, safePushConvoFull, convoMsgAbort, loadConvoMessages, refreshTalkMessages, loadConvosFromDB, loadMoreTalkConvos, onTalkConvoListScroll, newTalk, selectTalk, deleteTalk, renameTalk, renameTalkRemark, createTalkConvoGroup, moveTalkConvoToGroup, setTalkConvoGroup, toggleTalkPin, renameTalkConvoGroup, startTalkConvoDrag, endTalkConvoDrag, dropTalkConvoToGroup, onModelChange, countTalkUserTurns, buildTalkHandoffSummary, copyText, copyTalkSession, generateTalkHandoff, startNewClaudeSessionNextTurn, continueTalkInTerminal, terminalResumeCommand, copyTerminalResumeCommand, writeTerminalHandoff, sendTerminalShortcut, lastTalkEnterAt, lastTalkEnterPos, autoGrowTalk, handleTalkEnter, addTalkAttachment, onTalkImageSelect, removeTalkAttachment, uploadTalkAvatar, uploadVirtualCameraImage, togglePhoneInspect, requestPhoneInspectFromAi, rejectPhoneInspectRequest, acceptPhoneInspectRequest, captureStreamFrame, stopPhoneInspectShare, playTalkNotification, pushBase64ToUint8Array, ensureTalkWebPushSubscription, disableTalkWebPushSubscription, requestTalkNotificationPermission, enableNidoNativePush, handleTalkServiceWorkerMessage, registerTalkServiceWorker, postTalkServiceWorker, syncTalkServiceWorkerProactive, sendTalkExternalNotification, testTalkWebPush, showTalkToast, jumpToTalkToast, scheduleTalkProactive, syncTalkProactiveSettingsToServer, pollTalkProactiveEvents, triggerTalkProactive, pendingPokePayload, clearPendingPoke, sendTalk, postTalkActivity, pokeClaude };
     }
 };
