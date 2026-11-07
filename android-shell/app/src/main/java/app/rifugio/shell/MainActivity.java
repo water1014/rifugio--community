@@ -47,7 +47,10 @@ public class MainActivity extends Activity {
     private boolean unifiedPushReceiverRegistered = false;
     private final BroadcastReceiver unifiedPushReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
-            if (webView != null && webView.getUrl() != null && isConfiguredServerPage(webView.getUrl())) {
+            if (webView == null || webView.getUrl() == null || !isConfiguredServerPage(webView.getUrl())) return;
+            if (ACTION_PUSH_TOKEN_REFRESHED.equals(intent.getAction())) {
+                dispatchNativePushToken();
+            } else if (ACTION_UNIFIED_PUSH_UPDATED.equals(intent.getAction())) {
                 dispatchUnifiedPushSubscription();
             }
         }
@@ -134,6 +137,7 @@ public class MainActivity extends Activity {
 
     private void registerUnifiedPushReceiver() {
         IntentFilter filter = new IntentFilter(ACTION_UNIFIED_PUSH_UPDATED);
+        filter.addAction(ACTION_PUSH_TOKEN_REFRESHED);
         if (Build.VERSION.SDK_INT >= 33) {
             registerReceiver(unifiedPushReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         } else {
