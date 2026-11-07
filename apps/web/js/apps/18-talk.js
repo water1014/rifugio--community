@@ -171,7 +171,7 @@ window.Rifugio.useTalk = function(ctx) {
                 virtualCameraImage: '',
                 userVideoCardImage: '',
                 aiVideoCardImage: '',
-                provider: 'claude-code',
+                provider: 'openai-compatible',
                 executionMode: 'agent',
                 claudeExecutionMode: 'terminal',
                 autoSessionRelay:true,          // 到一定轮数后自动用新 Claude Code session 接力
@@ -196,10 +196,10 @@ window.Rifugio.useTalk = function(ctx) {
                 proactiveEndTime:'23:30',
                 proactiveTimezone:'',
                 proactiveText:'',
-                baseUrl: '',
+                baseUrl: 'https://opencode.ai/zen/go',
                 apiKey: '',
                 apiModel: '',
-                apiProtocol: 'compatible',
+                apiProtocol: 'opencode-go',
                 customHeaders: '',
                 claudeModel: 'default',
                 ttsProvider: '',
@@ -302,8 +302,11 @@ window.Rifugio.useTalk = function(ctx) {
                 try { talkSettings.proactiveTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kuala_Lumpur'; }
                 catch(_) { talkSettings.proactiveTimezone = 'Asia/Kuala_Lumpur'; }
             }
-            if (!['claude-code', 'openai-compatible'].includes(String(talkSettings.provider || ''))) talkSettings.provider = 'claude-code';
-            if (!['compatible', 'anthropic'].includes(String(talkSettings.apiProtocol || ''))) talkSettings.apiProtocol = 'compatible';
+            if (!['claude-code', 'openai-compatible'].includes(String(talkSettings.provider || ''))) talkSettings.provider = 'openai-compatible';
+            // Nido does not require a Claude subscription. Migrate the old default to the API provider.
+            if (talkSettings.provider === 'claude-code') talkSettings.provider = 'openai-compatible';
+            if (!['compatible', 'opencode-go', 'deepseek', 'anthropic'].includes(String(talkSettings.apiProtocol || ''))) talkSettings.apiProtocol = 'opencode-go';
+            if (String(talkSettings.baseUrl || '').includes('opencode.ai') && talkSettings.apiProtocol === 'compatible') talkSettings.apiProtocol = 'opencode-go';
             if (!['agent', 'terminal'].includes(String(talkSettings.executionMode || ''))) talkSettings.executionMode = 'agent';
             // API 大脑只接管当前消息，不能覆盖用户为 Claude 保存的 Terminal / -p 偏好。
             if (['agent', 'terminal'].includes(String(savedTalkSettings.claudeExecutionMode || ''))) {
