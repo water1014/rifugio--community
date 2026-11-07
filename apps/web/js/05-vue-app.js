@@ -1880,7 +1880,7 @@
                 port.availableModels = [];
                 const defaults = {
                     openai:'https://api.openai.com/v1',
-                    opencode-go:'https://opencode.ai/zen/go',
+                    'opencode-go':'https://opencode.ai/zen/go',
                     deepseek:'https://api.deepseek.com/v1',
                     compatible:'https://api.openai.com/v1',
                 };
