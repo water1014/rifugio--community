@@ -1002,23 +1002,20 @@
                         <input v-model="port.label" @change="saveChatroomPorts" placeholder="端口显示名，如 GPT">
                         <label class="talk-switch mini"><input type="checkbox" v-model="port.enabled" @change="saveChatroomPorts"><span>启用</span></label>
                     </div>
-                    <template v-if="port.id !== 'cc'">
-                        <label>API 协议</label>
-                        <select v-model="port.provider" @change="onChatroomProviderChange(port)">
-                            <option value="auto">自动识别</option>
-                            <option value="openai">OpenAI</option>
-                            <option value="opencode-go">OpenCode Go（订阅）</option>
-                            <option value="anthropic">Anthropic / Claude</option>
-                            <option value="deepseek">DeepSeek</option>
-                            <option value="compatible">其他 OpenAI-compatible</option>
-                        </select>
-                    </template>
+                    <label>API 协议</label>
+                    <select v-model="port.provider" @change="onChatroomProviderChange(port)">
+                        <option value="auto">自动识别</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="opencode-go">OpenCode Go（订阅）</option>
+                        <option value="deepseek">DeepSeek 官方 API</option>
+                        <option value="compatible">其他 OpenAI 兼容接口</option>
+                    </select>
                     <label>AI 头像 URL</label>
                     <input v-model="port.avatar" @change="saveChatroomPorts" placeholder="https://...png">
                     <label>Base URL</label>
                     <input v-model="port.base_url" @change="saveChatroomPorts" placeholder="https://api.openai.com/v1">
                     <label>API Key</label>
-                    <input v-model="port.api_key" @change="saveChatroomPorts" type="password" placeholder="API Key / subscription token">
+                    <input v-model="port.api_key" @change="saveChatroomPorts" type="password" placeholder="API Key 或订阅令牌">
                     <label>自定义请求头（JSON，可选）</label>
                     <textarea v-model="port.custom_headers" @change="saveChatroomPorts" rows="3" placeholder='{"X-Client-Tag":"Nido","Authorization":"Bearer ..."}'></textarea>
                     <p class="talk-settings-note">适用于 OpenCode Go 等订阅网关。自定义请求头会由服务器代理转发；不要填写 Cookie、Host 等安全敏感请求头。</p>
