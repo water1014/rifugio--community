@@ -1630,6 +1630,8 @@
                     }
                     if (!ccRoomPort.base_url) ccRoomPort.base_url = 'https://opencode.ai/zen/go';
                     if (/^claude-/i.test(String(ccRoomPort.model || ''))) ccRoomPort.model = '';
+                    // Legacy CC ports defaulted this tool toggle off; enable it once during migration to the API-backed seat.
+                    if (migratedLegacyChatroomCc) ccRoomPort.rifugio_experience = true;
                 }
             } catch(_) {}
             const saveChatroomPorts = () => {
