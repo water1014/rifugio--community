@@ -1,4 +1,4 @@
-name: Build Rifugio Android APK
+name: Build Nido Android APK
 on:
   workflow_dispatch:
   push:
@@ -12,7 +12,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: rifugio-android-api-${{ github.ref }}
+  group: nido-android-api-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   build:
@@ -45,6 +45,6 @@ jobs:
         run: gradle --no-daemon assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: rifugio-android-debug-apk
+          name: nido-android-debug-apk
           path: android-shell/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
