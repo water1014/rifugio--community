@@ -83,3 +83,13 @@ The Android/Rifugio setup must support all three user-requested routes:
 - Artifact: `nido-android-debug-apk`, 4.4 MB, expires 2026-11-21 based on the upload metadata.
 - This is a debug validation artifact, not a release APK and not a user-ready app.
 - Highest-priority next work: remove manual server URL setup by configuring a stable HTTPS service origin; deploy and harden the backend; finish provider alignment for every AI feature; wire device registration from the Android bridge to authenticated API calls; configure a real push delivery path; and run installation, process-death, background delivery, notification tap, and upgrade/data-retention tests on a physical Android device.
+
+
+## Native push bridge audit (2026-11-07)
+
+- The Android project currently compiles and a debug APK artifact exists, but compilation alone does not prove notification delivery.
+- Audit found that the Android activity emitted FCM-token and UnifiedPush-subscription browser events, while the web app did not previously listen for them. Added `apps/web/js/06-nido-native-push.js` and loaded it after the Vue app to register FCM tokens at `/api/push/android/register` and UnifiedPush Web Push subscriptions at `/api/push/subscribe`, using the existing same-origin authenticated session.
+- The bridge restores tokens/subscriptions from Android SharedPreferences after WebView reload. It does not log token values or copy them into localStorage.
+- Notification tap payloads are emitted as `nido:open-conversation`; the Talk UI still needs a verified consumer that navigates to the correct conversation. Do not claim tap-through is complete until that consumer and cold-start behavior are device-tested.
+- FCM remains inactive until a Firebase project configuration and server service account are provisioned. UnifiedPush still requires a compatible distributor on the device. No live push delivery has been tested on physical hardware.
+- The first-run manual server URL screen remains. A stable production backend/domain and deployment configuration are still required before this can become a ready-to-use consumer APK.
