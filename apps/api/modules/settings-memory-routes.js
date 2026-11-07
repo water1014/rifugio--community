@@ -194,6 +194,50 @@ function createSettingsMemoryRoutes(ctx = {}) {
       }
     });
 
+    // --- Reusable completion using the encrypted personal LLM configuration ---
+    app.post('/api/settings/llm/complete', async (req, res) => {
+      try {
+        const settings = await getLLMConfig();
+        if (!settings) return res.json({ ok:false, error:'请先配置记忆与 AI 使用的 API' });
+        const apiKey = normalizeApiKey(settings.api_key || '');
+        const model = String(settings.model || '').trim();
+        if (!apiKey) return res.json({ ok:false, error:'请先填写 API Key' });
+        if (!model) return res.json({ ok:false, error:'请先选择模型 ID' });
+
+        const body = req.body || {};
+        const prompt = String(body.prompt || '').trim();
+        const systemPrompt = String(body.system_prompt || 'You are a careful assistant.').trim();
+        if (!prompt) return res.json({ ok:false, error:'缺少需要处理的文本' });
+        if (prompt.length > 40000) return res.json({ ok:false, error:'文本过长，请缩短后重试' });
+
+        const baseUrl = String(settings.base_url || 'https://api.openai.com/v1');
+        const provider = providerFor(settings.provider, baseUrl, model);
+        const checked = await validatePublicBaseUrl(baseUrl);
+        const endpoint = endpointFor(checked.toString().replace(/\/$/, ''), provider);
+        const customHeaders = withOpenCodeSession(settings.custom_headers || '', endpoint, 'nido-utility', model);
+        const input = {
+          provider, endpoint, apiKey, customHeaders, model,
+          messages: [
+            { role:'system', content:systemPrompt.slice(0, 5000) },
+            { role:'user', content:prompt },
+          ],
+          temperature:0.2,
+          tools:[],
+          namespace:'nido-utility',
+          requestId:crypto.randomUUID(),
+          routeName:'nido-utility',
+        };
+        const result = provider === 'anthropic'
+          ? await runAnthropic(input)
+          : await runOpenAiCompatible(input);
+        const text = String(result.text || '').trim();
+        if (!text) return res.json({ ok:false, error:'模型没有返回文本' });
+        return res.json({ ok:true, text, model, provider });
+      } catch (e) {
+        return res.json({ ok:false, error:e.message || 'API 请求失败' });
+      }
+    });
+
     // --- Memories merge ---
     app.post('/api/memories/merge', async (req, res) => {
       const { ids, prompt } = req.body;
