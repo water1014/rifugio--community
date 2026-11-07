@@ -2459,31 +2459,17 @@
                                 <div class="talk-settings-card img-preset-storage-card">
                                     <details class="img-preset-collapse">
                                     <summary>
-                                        <span>模型</span><em>{{ talkSettings.provider === 'openai-compatible' ? ('API · ' + (talkSettings.apiModel || '未选择模型')) : ('Terminal · ' + (talkSettings.claudeModel || '未选择模型')) }} · 点开设置</em>
+                                        <span>模型与接口</span><em>API · {{ talkSettings.apiModel || '未选择模型' }} · 点开设置</em>
                                     </summary>
-                                    <select v-model="talkSettings.provider" @change="saveTalkSettings">
-                                        <option value="openai-compatible">Nido API（OpenCode Go / DeepSeek / 兼容接口）</option>
-                                    </select>
-                                    <p class="talk-settings-note" v-if="talkSettings.provider === 'openai-compatible'">18app 专属 API：保留本应用的恋爱体验、配置与对话，只走 /api/talk-api；绝不进入聊天室 API、Claude Code 或 Terminal。切换 API 不会改动你保存的 Terminal / -p 偏好。</p>
-                                    <template v-if="talkSettings.provider === 'claude-code'">
-                                    <select v-model="talkSettings.claudeModel">
-                                        <option v-if="!TALK_MODELS.some(m => m.id === talkSettings.claudeModel)" :value="talkSettings.claudeModel">{{ talkSettings.claudeModel }}</option>
-                                        <option v-for="m in TALK_MODELS" :key="m.id" :value="m.id">{{ m.label }}</option>
-                                    </select>
-                                    <select v-model="talkSettings.claudeEffort">
-                                        <option value="low">Effort · low</option>
-                                        <option value="medium">Effort · medium</option>
-                                        <option value="high">Effort · high</option>
-                                        <option value="off">Effort · off</option>
-                                    </select>
-                                    <input v-model="talkSettings.claudeModel" placeholder="自定义 Claude 模型 ID">
-                                    <label class="talk-settings-range">
-                                        <span>对话消息字号 {{ talkSettings.messageFontSize || 13 }}px</span>
-                                        <input v-model.number="talkSettings.messageFontSize" type="range" min="11" max="22" step="1">
-                                    </label>
-                                    <label class="talk-switch mini"><input type="checkbox" v-model="talkSettings.timestampUserMessages"><span>每条用户消息附带当前时间给 AI</span></label>
+                                    <p class="talk-settings-note">Nido 对话统一使用你配置的 API 服务，不需要 Claude 订阅。可选择 OpenCode Go、DeepSeek 或其他 OpenAI 兼容接口。</p>
+                                    <template>
+                                        <label class="talk-settings-range">
+                                            <span>对话消息字号 {{ talkSettings.messageFontSize || 13 }}px</span>
+                                            <input v-model.number="talkSettings.messageFontSize" type="range" min="11" max="22" step="1">
+                                        </label>
+                                        <label class="talk-switch mini"><input type="checkbox" v-model="talkSettings.timestampUserMessages"><span>每条用户消息附带当前时间给 AI</span></label>
                                     </template>
-                                    <template v-if="talkSettings.provider === 'openai-compatible'">
+                                    <template>
                                         <select v-model="talkSettings.apiProtocol" @change="onTalkApiProtocolChange">
                                             <option value="compatible">OpenAI 兼容 / OpenCode Go（Bearer · /chat/completions）</option>
                                             <option value="opencode-go">OpenCode Go 订阅专用</option>
@@ -2502,7 +2488,7 @@
                                         <select v-if="talkSettings.availableTextModels.length" v-model="talkSettings.apiModel" @change="saveTalkSettings">
                                             <option v-for="m in talkSettings.availableTextModels" :key="m.id || m" :value="m.id || m">{{ m.label || m.id || m }}</option>
                                         </select>
-                                        <p class="talk-settings-note">国内中转一般选“OpenAI 兼容”，即使模型名含 Claude。Base URL 建议填到版本根目录（如 /v1）；误填完整 /models、/chat/completions 或 /messages 也会自动修正。</p>
+                                        <p class="talk-settings-note">使用兼容网关时选择“OpenAI 兼容”；Base URL 建议填写 API 版本根目录（如 /v1），不要填写完整的 /models 或 /chat/completions 路径。</p>
                                         <p v-if="talkSettings.modelFetchStatus" class="talk-settings-note">{{ talkSettings.modelFetchStatus }}</p>
                                     </template>
                                     </details>
