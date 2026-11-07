@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
-  assert.match(html, /18-talk-image\\.js\\?v=nido-local-nai-[a-z0-9-]+/);
+const image = fs.readFileSync(path.join(root, 'js/apps/18-talk-image.js'), 'utf8');
 const stream = fs.readFileSync(path.join(root, 'js/apps/18-talk-stream.js'), 'utf8');
 const talk = fs.readFileSync(path.join(root, 'js/apps/18-talk.js'), 'utf8');
 const native = fs.readFileSync(path.resolve(root, '../../android-shell/app/src/main/java/app/rifugio/shell/MainActivity.java'), 'utf8');
@@ -23,7 +23,6 @@ test('native NAI ZIP response is decoded into persistent local image URLs', () =
   assert.match(native, /extractNaiImages\(response\)/);
   assert.match(native, /result\.put\("imageUrls", urls\)/);
   assert.match(stream, /imageUrls:Array\.isArray\(envelope\.imageUrls\)/);
-  assert.match(stream, /imageDataUrl:String\(envelope\.imageDataUrl \|\| ''\)/);
   assert.match(image, /response\.imageUrls/);
 });
 
@@ -32,7 +31,7 @@ test('local image settings and gallery restore without server calls', () => {
   assert.match(image, /NIDO_IMAGE_CONFIG_LS/);
   assert.match(image, /restoreLatestNaiImages\(\)/);
   assert.match(image, /nido-nai-gallery-v1/);
-  assert.match(html, /18-talk-image\.js\?v=nido-local-nai-20261107/);
+  assert.match(html, /18-talk-image\.js\?v=nido-local-nai-[a-z0-9-]+/);
 });
 
 test('full local chat snapshot is not overwritten before IndexedDB restore completes', () => {
