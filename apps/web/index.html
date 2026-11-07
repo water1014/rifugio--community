@@ -2477,9 +2477,10 @@
                                     <template v-if="talkSettings.provider === 'openai-compatible'">
                                         <select v-model="talkSettings.apiProtocol" @change="saveTalkSettings">
                                             <option value="compatible">OpenAI 兼容 / OpenCode Go（Bearer · /chat/completions）</option>
+                                            <option value="opencode-go">OpenCode Go 订阅专用</option>
                                             <option value="anthropic">Anthropic 原生（x-api-key · /messages）</option>
                                         </select>
-                                        <input v-model="talkSettings.baseUrl" @change="saveTalkSettings" placeholder="Base URL，例如 https://relay.example/v1">
+                                        <input v-model="talkSettings.baseUrl" @change="saveTalkSettings" placeholder="Base URL；OpenCode Go 可填 https://opencode.ai/zen/go">
                                         <input v-model="talkSettings.apiKey" @change="saveTalkSettings" type="password" placeholder="API Key（不用加 Bearer）">
                                         <label>自定义请求头（JSON，可选）</label>
                                         <textarea v-model="talkSettings.customHeaders" @change="saveTalkSettings" rows="3" placeholder='{"X-Client-Tag":"rifugio"}'></textarea>
