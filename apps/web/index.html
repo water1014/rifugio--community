@@ -15,7 +15,7 @@
     <script src="./js/01-viewport-seed.js"></script>
     <title>Nido</title>
 
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400;1,600&family=Noto+Serif+SC:wght@200;300;400&family=Pinyon+Script&family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
+    <!-- Android standalone: do not block first paint on Google Fonts or external network. CSS font stacks fall back to installed system fonts. -->
     <!-- Tailwind 预编译静态 CSS（原 cdn.tailwindcss.com 运行时 JIT 会在每次 DOM 变化时重编译，手机上极卡）。
          加新 utility class 后需重新生成：bash apps/web/tools/tailwind/build.sh -->
     <link rel="stylesheet" href="./vendor/tailwind.css?v=lettura-20260707">
