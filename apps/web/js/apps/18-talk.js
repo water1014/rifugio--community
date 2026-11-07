@@ -367,6 +367,17 @@ window.Rifugio.useTalk = function(ctx) {
                 });
                 try { localStorage.setItem(TALK_SETTINGS_LS, JSON.stringify(safeSettings)); } catch(_) {}
             }
+            if (isNidoLocalApp()) {
+                // The standalone Android build never falls back to Claude CLI/Terminal.
+                talkSettings.provider = 'openai-compatible';
+                if (talkSettings.apiProtocol === 'anthropic') {
+                    talkSettings.apiProtocol = 'opencode-go';
+                    talkSettings.baseUrl = 'https://opencode.ai/zen/go';
+                    talkSettings.apiModel = '';
+                }
+                if (talkSettings.executionMode === 'terminal') talkSettings.executionMode = 'agent';
+                talkSettings.claudeExecutionMode = 'agent';
+            }
             const stripBundledTalkPresetCss = (css) => {
                 let next = String(css || '');
                 [TALK_IMESSAGE_CUSTOM_CSS_PRESET, TALK_COMPANION_CUSTOM_CSS_PRESET].forEach(preset => {
