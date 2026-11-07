@@ -884,7 +884,7 @@ window.Rifugio.useTalkCall = function(ctx) {
             const startVideoTalkCall = () => startTalkCall({ video:true });
 
             const syncCallEndedToClaude = (conversationId) => {
-                if (!conversationId || talkSettings.executionMode !== 'terminal') return;
+                if (window.NidoNative || !conversationId || talkSettings.executionMode !== 'terminal') return;
                 fetch('/api/terminal-chat/event', {
                     method:'POST',
                     credentials:'include',
