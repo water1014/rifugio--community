@@ -369,14 +369,8 @@ public class MainActivity extends Activity {
         }
     }
 
-    private final class NidoBridge {
-        @JavascriptInterface public String getSecret(String name) {
-            return readEncryptedSecret(name);
-        }
-        @JavascriptInterface public boolean setSecret(String name, String value) {
-            return writeEncryptedSecret(name, value);
-        }
-        @JavascriptInterface public void postJson(String requestId, String rawUrl, String rawHeaders, String body) {
+    private void enqueueNativeRequest(String requestId, String method, String rawUrl, String rawHeaders, String body) {
+
             final String id = requestId == null ? "" : requestId.substring(0, Math.min(80, requestId.length()));
             httpExecutor.execute(() -> {
                 JSONObject result = new JSONObject();
@@ -393,11 +387,11 @@ public class MainActivity extends Activity {
                     byte[] requestBody = (body == null ? "{}" : body).getBytes(StandardCharsets.UTF_8);
                     if (requestBody.length > 12 * 1024 * 1024) throw new IllegalArgumentException("请求内容超过 12 MB");
                     connection = (HttpURLConnection) url.openConnection();
-                    connection.setRequestMethod("POST");
+                    connection.setRequestMethod(method);
                     connection.setInstanceFollowRedirects(false);
                     connection.setConnectTimeout(20000);
                     connection.setReadTimeout(150000);
-                    connection.setDoOutput(true);
+                    connection.setDoOutput("POST".equals(method));
                     connection.setRequestProperty("Content-Type", "application/json");
                     JSONObject headers = new JSONObject(rawHeaders == null ? "{}" : rawHeaders);
                     Iterator<String> names = headers.keys();
@@ -413,8 +407,10 @@ public class MainActivity extends Activity {
                                 || lower.equals("transfer-encoding")) continue;
                         connection.setRequestProperty(name, value);
                     }
-                    try (OutputStream output = connection.getOutputStream()) {
-                        output.write(requestBody);
+                    if ("POST".equals(method)) {
+                        try (OutputStream output = connection.getOutputStream()) {
+                            output.write(requestBody);
+                        }
                     }
                     int status = connection.getResponseCode();
                     InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
@@ -433,6 +429,21 @@ public class MainActivity extends Activity {
                 }
                 deliverNativeHttpResult(id, result);
             });
+        
+    }
+
+    private final class NidoBridge {
+        @JavascriptInterface public String getSecret(String name) {
+            return readEncryptedSecret(name);
+        }
+        @JavascriptInterface public boolean setSecret(String name, String value) {
+            return writeEncryptedSecret(name, value);
+        }
+        @JavascriptInterface public void postJson(String requestId, String rawUrl, String rawHeaders, String body) {
+            enqueueNativeRequest(requestId, "POST", rawUrl, rawHeaders, body);
+        }
+        @JavascriptInterface public void getJson(String requestId, String rawUrl, String rawHeaders) {
+            enqueueNativeRequest(requestId, "GET", rawUrl, rawHeaders, "");
         }
         @JavascriptInterface public String getPushToken() {
             return getSharedPreferences(NidoMessagingService.PREFS, MODE_PRIVATE)
