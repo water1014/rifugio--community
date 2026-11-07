@@ -9,6 +9,16 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.InetAddress;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.Iterator;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.Menu;
@@ -48,6 +58,7 @@ public class MainActivity extends Activity {
     private WebView webView;
     private SharedPreferences prefs;
     private WebViewAssetLoader assetLoader;
+    private final ExecutorService httpExecutor = Executors.newCachedThreadPool();
     private boolean unifiedPushReceiverRegistered = false;
     private final BroadcastReceiver unifiedPushReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
@@ -250,7 +261,106 @@ public class MainActivity extends Activity {
         intent.removeExtra("messageId");
     }
 
+    private boolean isUnsafeAddress(InetAddress address) {
+        if (address.isAnyLocalAddress() || address.isLoopbackAddress()
+                || address.isLinkLocalAddress() || address.isSiteLocalAddress()
+                || address.isMulticastAddress()) return true;
+        byte[] bytes = address.getAddress();
+        if (bytes.length == 4) {
+            int a = bytes[0] & 255, b = bytes[1] & 255;
+            return a == 0 || a == 10 || a == 127 || a >= 224
+                    || (a == 100 && b >= 64 && b <= 127)
+                    || (a == 169 && b == 254)
+                    || (a == 172 && b >= 16 && b <= 31)
+                    || (a == 192 && (b == 0 || b == 168))
+                    || (a == 198 && (b == 18 || b == 19));
+        }
+        return bytes.length == 16 && (bytes[0] & 0xfe) == 0xfc;
+    }
+
+    private String readLimited(InputStream input, int limit) throws Exception {
+        if (input == null) return "";
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int total = 0, count;
+        while ((count = input.read(buffer)) != -1) {
+            total += count;
+            if (total > limit) throw new IllegalStateException("响应内容过大");
+            output.write(buffer, 0, count);
+        }
+        return output.toString("UTF-8");
+    }
+
+    private void deliverNativeHttpResult(String requestId, JSONObject result) {
+        if (isFinishing() || isDestroyed() || webView == null) return;
+        final String payload = result.toString();
+        runOnUiThread(() -> {
+            if (webView == null || isFinishing() || isDestroyed()) return;
+            String script = "window.__nidoNativeHttpResolve && window.__nidoNativeHttpResolve("
+                    + JSONObject.quote(requestId) + "," + JSONObject.quote(payload) + ")";
+            webView.evaluateJavascript(script, null);
+        });
+    }
+
     private final class NidoBridge {
+        @JavascriptInterface public void postJson(String requestId, String rawUrl, String rawHeaders, String body) {
+            final String id = requestId == null ? "" : requestId.substring(0, Math.min(80, requestId.length()));
+            httpExecutor.execute(() -> {
+                JSONObject result = new JSONObject();
+                HttpURLConnection connection = null;
+                try {
+                    URL url = new URL(rawUrl);
+                    if (!"https".equalsIgnoreCase(url.getProtocol()) || url.getUserInfo() != null
+                            || url.getHost() == null || url.getHost().isEmpty()) {
+                        throw new IllegalArgumentException("只允许 HTTPS API 地址");
+                    }
+                    for (InetAddress address : InetAddress.getAllByName(url.getHost())) {
+                        if (isUnsafeAddress(address)) throw new IllegalArgumentException("API 地址指向本地或私有网络，已拒绝");
+                    }
+                    byte[] requestBody = (body == null ? "{}" : body).getBytes(StandardCharsets.UTF_8);
+                    if (requestBody.length > 12 * 1024 * 1024) throw new IllegalArgumentException("请求内容超过 12 MB");
+                    connection = (HttpURLConnection) url.openConnection();
+                    connection.setRequestMethod("POST");
+                    connection.setInstanceFollowRedirects(false);
+                    connection.setConnectTimeout(20000);
+                    connection.setReadTimeout(150000);
+                    connection.setDoOutput(true);
+                    connection.setRequestProperty("Content-Type", "application/json");
+                    JSONObject headers = new JSONObject(rawHeaders == null ? "{}" : rawHeaders);
+                    Iterator<String> names = headers.keys();
+                    while (names.hasNext()) {
+                        String name = names.next();
+                        String value = headers.optString(name, "");
+                        String lower = name.toLowerCase(java.util.Locale.ROOT);
+                        if (!name.matches("[!#$%&'*+.^_`|~0-9A-Za-z-]{1,80}")
+                                || value.length() > 8192 || value.contains("\r") || value.contains("\n")
+                                || lower.equals("host") || lower.equals("content-length")
+                                || lower.equals("connection") || lower.equals("cookie")
+                                || lower.equals("set-cookie") || lower.startsWith("proxy-")
+                                || lower.equals("transfer-encoding")) continue;
+                        connection.setRequestProperty(name, value);
+                    }
+                    try (OutputStream output = connection.getOutputStream()) {
+                        output.write(requestBody);
+                    }
+                    int status = connection.getResponseCode();
+                    InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+                    String responseBody = readLimited(stream, 12 * 1024 * 1024);
+                    result.put("status", status);
+                    result.put("body", responseBody);
+                    if (status >= 300 && status < 400) result.put("error", "API 重定向已拒绝，请检查 Base URL");
+                } catch (Exception error) {
+                    try {
+                        result.put("status", 0);
+                        result.put("body", "");
+                        result.put("error", error.getMessage() == null ? "网络请求失败" : error.getMessage());
+                    } catch (Exception ignored) {}
+                } finally {
+                    if (connection != null) connection.disconnect();
+                }
+                deliverNativeHttpResult(id, result);
+            });
+        }
         @JavascriptInterface public String getPushToken() {
             return getSharedPreferences(NidoMessagingService.PREFS, MODE_PRIVATE)
                     .getString(NidoMessagingService.KEY_TOKEN, "");
@@ -317,6 +427,7 @@ public class MainActivity extends Activity {
             try { unregisterReceiver(unifiedPushReceiver); } catch (Exception ignored) {}
             unifiedPushReceiverRegistered = false;
         }
+        httpExecutor.shutdownNow();
         super.onDestroy();
     }
 
