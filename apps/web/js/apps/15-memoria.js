@@ -50,6 +50,11 @@ window.Rifugio.useMemoria = function(ctx) {
                     const tail = riSep >= 0 ? original.slice(riSep) : '';
                     const newContent = editContent.value.trim() + tail;
 
+                    if (isNidoLocalMemory()) {
+                        if (patchLocalMemory(editingBucket.value.id, { content:newContent })) editingBucket.value = null;
+                        editSaving.value = false;
+                        return;
+                    }
                     const res = await fetch(`/api/buckets/${editingBucket.value.id}`, {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
@@ -71,6 +76,78 @@ window.Rifugio.useMemoria = function(ctx) {
             };
             const surfacedBuckets = ref([]);
             const expandedBuckets = ref({});
+            // Standalone Nido stores memories on-device. No /api or /memory-api calls.
+            const NIDO_LOCAL_MEMORY_KEY = 'nido-local-memory-v1';
+            const isNidoLocalMemory = () => Boolean(window.NidoNative);
+            const readLocalMemories = () => {
+                try {
+                    const value = JSON.parse(localStorage.getItem(NIDO_LOCAL_MEMORY_KEY) || '[]');
+                    return Array.isArray(value) ? value.filter(item => item && typeof item === 'object') : [];
+                } catch(_) { return []; }
+            };
+            const writeLocalMemories = (items) => {
+                try {
+                    localStorage.setItem(NIDO_LOCAL_MEMORY_KEY, JSON.stringify(items));
+                    refreshLocalMemoryState(items);
+                    return true;
+                } catch(error) {
+                    dreamMsg.value = '本地记忆保存失败，请检查手机存储空间：' + (error?.message || error);
+                    return false;
+                }
+            };
+            const refreshLocalMemoryState = (items = readLocalMemories()) => {
+                const all = [...items].sort((a,b) => Number(b.updatedAt || b.createdAt || 0) - Number(a.updatedAt || a.createdAt || 0));
+                allBuckets.value = all.filter(item => item.bucket_type !== 'feel' && item.status !== 'feel');
+                feelBuckets.value = all.filter(item => item.bucket_type === 'feel' || item.status === 'feel');
+                surfacedBuckets.value = all.filter(item => item.status === 'active' && !item.digested).slice(0,15);
+                const importance = {};
+                const domains = {};
+                all.forEach(item => {
+                    const n = Math.max(1, Math.min(10, Number(item.importance || 5)));
+                    importance[n] = (importance[n] || 0) + 1;
+                    (Array.isArray(item.domain) ? item.domain : []).forEach(domain => { domains[domain] = (domains[domain] || 0) + 1; });
+                });
+                const total = all.length;
+                const active = all.filter(item => item.status === 'active' && !item.digested).length;
+                const quiet = all.filter(item => item.status === 'quiet' || item.resolved).length;
+                const digested = all.filter(item => item.status === 'digested' || item.digested).length;
+                const feel = all.filter(item => item.bucket_type === 'feel' || item.status === 'feel').length;
+                Object.assign(bucketStats, {
+                    total, active, quiet, digested, feel, unresolved:active, resolved:quiet,
+                    pinned:all.filter(item => item.pinned).length,
+                    domains:Object.entries(domains).map(([name,count]) => ({ name, count })),
+                    emotions:[], importance, monthly:[],
+                });
+            };
+            const saveLocalMemory = (item) => {
+                const items = readLocalMemories();
+                const now = Date.now();
+                const next = {
+                    id:item.id || ('local-' + now + '-' + Math.random().toString(36).slice(2,8)),
+                    name:String(item.name || '未命名记忆').slice(0,120),
+                    summary:String(item.summary || ''),
+                    content:String(item.content || ''),
+                    domain:Array.isArray(item.domain) ? item.domain : [],
+                    tags:Array.isArray(item.tags) ? item.tags : [],
+                    importance:Math.max(1,Math.min(10,Number(item.importance || 5))),
+                    bucket_type:item.bucket_type || 'memory',
+                    status:item.status || 'active',
+                    pinned:Boolean(item.pinned),
+                    createdAt:Number(item.createdAt || now),
+                    updatedAt:now,
+                };
+                const index = items.findIndex(entry => entry.id === next.id);
+                if (index >= 0) items[index] = { ...items[index], ...next };
+                else items.unshift(next);
+                return writeLocalMemories(items) ? next : null;
+            };
+            const patchLocalMemory = (id, patch) => {
+                const items = readLocalMemories();
+                const index = items.findIndex(item => String(item.id) === String(id));
+                if (index < 0) return false;
+                items[index] = { ...items[index], ...patch, updatedAt:Date.now() };
+                return writeLocalMemories(items);
+            };
             const bucketFilter     = ref('');
             const bucketTypeFilter = ref('');
 
@@ -127,6 +204,12 @@ window.Rifugio.useMemoria = function(ctx) {
             });
 
             const loadBucketStats = async () => {
+                if (isNidoLocalMemory()) {
+                    bucketLoading.value = true;
+                    refreshLocalMemoryState();
+                    bucketLoading.value = false;
+                    return;
+                }
                 bucketLoading.value = true;
                 try {
                     const ts = Date.now();
@@ -162,6 +245,10 @@ window.Rifugio.useMemoria = function(ctx) {
             };
 
             const loadFeelBuckets = async () => {
+                if (isNidoLocalMemory()) {
+                    refreshLocalMemoryState();
+                    return;
+                }
                 try {
                     const res = await fetch('/api/buckets/feel?limit=50');
                     const j = await res.json();
@@ -172,6 +259,23 @@ window.Rifugio.useMemoria = function(ctx) {
 
             const saveManualFeel = async () => {
                 if (!manualFeel.content.trim()) return alert('请填写 Feel 内容');
+                if (isNidoLocalMemory()) {
+                    const saved = saveLocalMemory({
+                        name:manualFeel.name || '主观沉淀',
+                        content:manualFeel.content.trim(),
+                        summary:manualFeel.content.trim().slice(0,120),
+                        tags:splitCsv(manualFeel.tags),
+                        domain:['feel'],
+                        importance:manualFeel.importance || 8,
+                        bucket_type:'feel',
+                        status:'feel',
+                    });
+                    if (!saved) return;
+                    resetManualFeel();
+                    showFeelForm.value = false;
+                    dreamMsg.value = '已保存到这台手机的本地记忆。';
+                    return;
+                }
                 try {
                     const res = await fetch('/api/buckets/hold', {
                         method: 'POST',
@@ -201,6 +305,10 @@ window.Rifugio.useMemoria = function(ctx) {
             const renameBucket = async (b) => {
                 const newName = prompt('记忆名称：', b.name);
                 if (!newName || newName === b.name) return;
+                if (isNidoLocalMemory()) {
+                    patchLocalMemory(b.id, { name:newName });
+                    return;
+                }
                 const res = await fetch('/api/buckets/' + b.id, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
@@ -211,12 +319,24 @@ window.Rifugio.useMemoria = function(ctx) {
                 else alert(j.error || '改名失败');
             };
             const resolveBucket = async (id) => {
+                if (isNidoLocalMemory()) {
+                    patchLocalMemory(id, { status:'quiet', resolved:true });
+                    return;
+                }
                 await fetch(`/api/buckets/${id}/quiet`, { method: 'POST' });
                 surfacedBuckets.value = surfacedBuckets.value.filter(b => b.id !== id);
                 await loadBucketStats();
             };
 
             const setBucketStatus = async (b, status) => {
+                if (isNidoLocalMemory()) {
+                    patchLocalMemory(b.id, {
+                        status,
+                        resolved:status === 'quiet',
+                        digested:status === 'digested',
+                    });
+                    return;
+                }
                 const endpoint = status === 'active' ? 'activate' : status === 'digested' ? 'digest' : 'quiet';
                 try {
                     const res = await fetch(`/api/buckets/${b.id}/${endpoint}`, { method: 'POST' });
@@ -246,6 +366,15 @@ window.Rifugio.useMemoria = function(ctx) {
                 dreamSuggestions.value[kind] = dreamSuggestions.value[kind].filter(s => s.id !== id);
             };
             const confirmDreamSuggestion = async (kind, suggestion) => {
+                if (isNidoLocalMemory()) {
+                    patchLocalMemory(suggestion.id, {
+                        status:kind === 'quiet' ? 'quiet' : 'digested',
+                        resolved:kind === 'quiet',
+                        digested:kind !== 'quiet',
+                    });
+                    dismissDreamSuggestion(kind, suggestion.id);
+                    return;
+                }
                 const endpoint = kind === 'quiet' ? 'quiet' : kind === 'digested' ? 'digest' : 'archive';
                 try {
                     const res = await fetch(`/api/buckets/${suggestion.id}/${endpoint}`, { method: 'POST' });
@@ -259,6 +388,10 @@ window.Rifugio.useMemoria = function(ctx) {
             };
 
             const runDream = async () => {
+                if (isNidoLocalMemory()) {
+                    dreamMsg.value = '本地记忆已启用。自动 Dream 整理尚未接入本地模型流程，不会请求任何服务器。';
+                    return;
+                }
                 dreamLoading.value = true;
                 dreamMsg.value = '';
                 clearDreamSuggestions();
@@ -309,6 +442,10 @@ window.Rifugio.useMemoria = function(ctx) {
             };
 
             const pinBucket = async (b) => {
+                if (isNidoLocalMemory()) {
+                    patchLocalMemory(b.id, { pinned:!b.pinned });
+                    return;
+                }
                 await fetch(`/api/buckets/${b.id}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
@@ -319,6 +456,10 @@ window.Rifugio.useMemoria = function(ctx) {
 
             const deleteBucket = async (id) => {
                 if (!confirm('确定删除这条记忆？')) return;
+                if (isNidoLocalMemory()) {
+                    writeLocalMemories(readLocalMemories().filter(item => String(item.id) !== String(id)));
+                    return;
+                }
                 const res = await fetch(`/api/buckets/${id}`, { method: 'DELETE' });
                 const j = await res.json().catch(() => ({}));
                 if (!res.ok || j.ok === false) return alert(j.error || '删除失败');
@@ -455,6 +596,10 @@ window.Rifugio.useMemoria = function(ctx) {
             });
 
             const loadBucketImportPrompt = async () => {
+                if (isNidoLocalMemory()) {
+                    try { bucketImportPrompt.value = localStorage.getItem('nido-local-memory-import-prompt') || DEFAULT_BUCKET_IMPORT_PROMPT_UI; } catch(_) {}
+                    return;
+                }
                 try {
                     const res = await fetch('/api/settings/bucket-import-prompt');
                     const j = await res.json();
@@ -466,6 +611,13 @@ window.Rifugio.useMemoria = function(ctx) {
                 }
             };
             const saveBucketImportPrompt = async () => {
+                if (isNidoLocalMemory()) {
+                    try {
+                        localStorage.setItem('nido-local-memory-import-prompt', bucketImportPrompt.value);
+                        bucketImportPromptMsg.value = '导入提示词已保存在本机。';
+                    } catch(error) { bucketImportPromptMsg.value = error?.message || '保存失败'; }
+                    return;
+                }
                 try {
                     const res = await fetch('/api/settings/bucket-import-prompt', {
                         method: 'PUT',
@@ -479,6 +631,11 @@ window.Rifugio.useMemoria = function(ctx) {
             };
             const resetBucketImportPrompt = async () => {
                 bucketImportPrompt.value = DEFAULT_BUCKET_IMPORT_PROMPT_UI;
+                if (isNidoLocalMemory()) {
+                    try { localStorage.removeItem('nido-local-memory-import-prompt'); } catch(_) {}
+                    bucketImportPromptMsg.value = '已恢复本机默认提示词。';
+                    return;
+                }
                 try {
                     const res = await fetch('/api/settings/bucket-import-prompt/reset', { method: 'POST' });
                     const j = await res.json();
@@ -500,6 +657,26 @@ window.Rifugio.useMemoria = function(ctx) {
 
             const runImport = async () => {
                 if (!importFile.value) return;
+                if (isNidoLocalMemory()) {
+                    importRunning.value = true;
+                    importProgress.value = '读取本地文件…';
+                    importResult.value = null;
+                    try {
+                        const raw = await importFile.value.text();
+                        const parsed = JSON.parse(raw);
+                        const source = Array.isArray(parsed) ? parsed
+                            : (parsed.buckets || parsed.memories || parsed.data || parsed.entries || []);
+                        if (!Array.isArray(source)) throw new Error('文件中没有可识别的记忆数组。请使用包含 buckets、memories 或 data 数组的 JSON。');
+                        importCandidates.value = source.map(normalizeImportCandidate);
+                        importResult.value = { ok:true, dry_run:true, count:importCandidates.value.length, errors:[] };
+                    } catch(error) {
+                        importResult.value = { ok:false, error:'本地导入只接受结构化 JSON 记忆文件：' + (error?.message || error) };
+                    } finally {
+                        importRunning.value = false;
+                        importProgress.value = '';
+                    }
+                    return;
+                }
                 importRunning.value = true;
                 importProgress.value = '读取文件…';
                 importResult.value = null;
@@ -530,6 +707,31 @@ window.Rifugio.useMemoria = function(ctx) {
 
             const confirmImport = async () => {
                 if (!selectedImportCount.value) return;
+                if (isNidoLocalMemory()) {
+                    const activeRules = importReplaceRules.filter(r => r.on && r.from.trim());
+                    const applyRules = (value) => {
+                        let result = String(value || '');
+                        activeRules.forEach(rule => { result = result.replaceAll(rule.from, rule.to); });
+                        return result;
+                    };
+                    const selected = importCandidates.value.filter(item => item.selected !== false);
+                    let saved = 0;
+                    selected.forEach(item => {
+                        if (saveLocalMemory({
+                            name:item.name,
+                            summary:item.summary,
+                            content:applyRules(item.content),
+                            domain:splitCsv(item.domainText),
+                            tags:splitCsv(item.tagsText),
+                            importance:item.importance,
+                            bucket_type:'memory',
+                            status:'active',
+                        })) saved++;
+                    });
+                    importCandidates.value = [];
+                    importResult.value = { ok:true, imported:saved, message:'已导入本机记忆' };
+                    return;
+                }
                 importRunning.value = true;
                 importResult.value = null;
                 try {
@@ -580,6 +782,15 @@ window.Rifugio.useMemoria = function(ctx) {
 
             const runSemanticSearch = async () => {
                 if (!semanticQuery.value.trim()) return;
+                if (isNidoLocalMemory()) {
+                    const query = semanticQuery.value.trim().toLowerCase();
+                    searchResults.value = readLocalMemories().filter(item =>
+                        [item.name,item.summary,item.content,...(item.tags || []),...(item.domain || [])]
+                            .join(' ').toLowerCase().includes(query)
+                    ).slice(0,20);
+                    searchDone.value = true;
+                    return;
+                }
                 searchDone.value = false;
                 searchResults.value = [];
                 try {
@@ -616,6 +827,7 @@ window.Rifugio.useMemoria = function(ctx) {
             const autoEmotionMsg = ref('');
 
             const loadEmbedCfg = async () => {
+                if (isNidoLocalMemory()) return;
                 try {
                     const r = await fetch('/api/settings/embedding');
                     const j = await r.json();
@@ -623,6 +835,7 @@ window.Rifugio.useMemoria = function(ctx) {
                 } catch(e) {}
             };
             const saveEmbedCfg = async () => {
+                if (isNidoLocalMemory()) { alert('独立版不使用服务器 Embedding 配置。记忆搜索使用本机关键词检索。'); return; }
                 await fetch('/api/settings/embedding', {
                     method: 'PUT', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ base_url: embedCfg.base_url, api_key: embedCfg.api_key, model: embedCfg.model })
@@ -639,6 +852,11 @@ window.Rifugio.useMemoria = function(ctx) {
                 sttCfg.language = d.language || 'zh-CN';
             };
             const loadSttCfg = async () => {
+                if (isNidoLocalMemory()) {
+                    sttCfg.mode = 'browser';
+                    sttCfg.status = browserSttSupported.value ? '独立版使用手机/浏览器内置语音识别。' : '当前 WebView 暂不支持内置语音识别。';
+                    return;
+                }
                 sttCfg.loading = true;
                 try {
                     const r = await fetch('/api/settings/stt', { credentials:'include', cache:'no-store' });
@@ -653,6 +871,7 @@ window.Rifugio.useMemoria = function(ctx) {
                 }
             };
             const saveSttCfg = async () => {
+                if (isNidoLocalMemory()) { sttCfg.status = '独立版语音识别设置由系统提供，不需要服务器。'; return; }
                 if (sttCfg.saving) return;
                 sttCfg.saving = true;
                 sttCfg.status = '保存中…';
@@ -681,6 +900,11 @@ window.Rifugio.useMemoria = function(ctx) {
             };
             const dehydrateStatus = ref(null);
             const loadDehydrateStatus = async () => {
+                if (isNidoLocalMemory()) {
+                    const items = readLocalMemories();
+                    dehydrateStatus.value = { dehydrated:0, total:items.length, pct:0 };
+                    return;
+                }
                 const r = await fetch('/api/buckets/breath?top=1');
                 const j = await r.json();
                 if (j.ok) dehydrateStatus.value = {
@@ -697,6 +921,18 @@ window.Rifugio.useMemoria = function(ctx) {
             const dedupMsg = ref('');
             const runDedup = async () => {
                 if (!confirm('去重会归档相似重复记忆，钉选和更重要的条目会被保留。继续吗？')) return;
+                if (isNidoLocalMemory()) {
+                    const items = readLocalMemories();
+                    const seen = new Set();
+                    const kept = items.filter(item => {
+                        const key = String(item.name || '').trim().toLowerCase() + '|' + String(item.content || '').trim().toLowerCase();
+                        if (!key || seen.has(key)) return Boolean(item.pinned);
+                        seen.add(key); return true;
+                    });
+                    writeLocalMemories(kept);
+                    dedupMsg.value = '本地去重完成，已整理重复条目。';
+                    return;
+                }
                 dedupLoading.value = true; dedupMsg.value = '';
                 try {
                     const r = await fetch('/api/buckets/dedup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
@@ -707,6 +943,7 @@ window.Rifugio.useMemoria = function(ctx) {
                 dedupLoading.value = false;
             };
             const runDehydrate = async () => {
+                if (isNidoLocalMemory()) { dehydrateMsg.value = '本地记忆保留原文，不执行服务器脱水。'; return; }
                 dehydrateLoading.value = true; dehydrateMsg.value = '';
                 try {
                     const r = await fetch('/memory-api/buckets/dehydrate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
@@ -716,12 +953,14 @@ window.Rifugio.useMemoria = function(ctx) {
                 dehydrateLoading.value = false;
             };
             const loadBreathPreview = async () => {
+                if (isNidoLocalMemory()) { breathPreview.value = surfacedBuckets.value.slice(0,5); return; }
                 const r = await fetch('/api/buckets/breath?top=5');
                 const j = await r.json();
                 if (j.ok) breathPreview.value = j.surfaced || j.data || [];
             };
 
             const runAutoEmotion = async () => {
+                if (isNidoLocalMemory()) { autoEmotionMsg.value = '本地版暂不自动推断情绪标签，不会上传聊天内容。'; return; }
                 autoEmotionLoading.value = true; autoEmotionMsg.value = '';
                 try {
                     const r = await fetch('/memory-api/buckets/auto-emotion', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
@@ -732,6 +971,7 @@ window.Rifugio.useMemoria = function(ctx) {
             };
 
             const fetchModels = async () => {
+                if (isNidoLocalMemory()) { alert('请在聊天设置中配置模型。独立版记忆模块共用本机聊天 API，不另设服务器模型。'); return; }
                 if (!memSettings.base_url) return;
                 try {
                     const res = await fetch('/api/settings/llm/test', {
@@ -764,6 +1004,7 @@ window.Rifugio.useMemoria = function(ctx) {
                 }
             };
             const saveMemSettings = async () => {
+                if (isNidoLocalMemory()) { alert('独立版模型配置请在聊天设置中管理，密钥已由 Android 安全存储保护。'); return; }
                 await fetch('/api/settings/llm', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
@@ -773,6 +1014,7 @@ window.Rifugio.useMemoria = function(ctx) {
             };
 
             const loadEmbedStatus = async () => {
+                if (isNidoLocalMemory()) { embedStatus.value = { local:true, message:'本机关键词检索' }; return; }
                 try {
                     const res = await fetch('/api/embed/status');
                     const j = await res.json();
@@ -781,6 +1023,7 @@ window.Rifugio.useMemoria = function(ctx) {
             };
 
             const runEmbedBatch = async () => {
+                if (isNidoLocalMemory()) { embedBatchMsg.value = '独立版使用本机关键词检索，不需要 Embedding 服务。'; return; }
                 embedBatchMsg.value = '处理中…';
                 try {
                     const res = await fetch('/api/embed/batch', { method: 'POST' });
@@ -794,6 +1037,11 @@ window.Rifugio.useMemoria = function(ctx) {
             const selfExpanded = ref({});
             const selfLoading  = ref(false);
             const loadSelf = async () => {
+                if (isNidoLocalMemory()) {
+                    selfVersions.value = readLocalMemories().filter(item => (item.domain || []).includes('自我'));
+                    selfLoading.value = false;
+                    return;
+                }
                 selfLoading.value = true;
                 try {
                     const r = await fetch('/api/self?t=' + Date.now(), { cache: 'no-store' });
@@ -807,6 +1055,14 @@ window.Rifugio.useMemoria = function(ctx) {
 
             // 加载已保存的 LLM 配置（页面初始化时立即执行）
             const loadMemSettings = () => {
+                if (isNidoLocalMemory()) {
+                    memSettings.provider = 'opencode-go';
+                    memSettings.base_url = 'https://opencode.ai/zen/go';
+                    memSettings.api_key = '';
+                    memSettings.model = '';
+                    memSettings.custom_headers = '';
+                    return;
+                }
                 fetch('/api/settings/llm').then(r => r.json()).then(j => {
                     if (j.ok && j.data) {
                         if (j.data.base_url) memSettings.base_url = j.data.base_url;
