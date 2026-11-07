@@ -391,6 +391,22 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
                 }
             };
             const loadImageConfig = async () => {
+                if (imageStudio.localMode) {
+                    try {
+                        const c = JSON.parse(localStorage.getItem(NIDO_IMAGE_CONFIG_LS) || '{}') || {};
+                        applyImageConfigFromServer(c);
+                        talkSettings.imageProvider = 'novelai';
+                        const secret = window.NidoNative?.getSecret ? window.NidoNative.getSecret('talk_nai_api_key') : '';
+                        if (secret) talkSettings.naiApiKey = secret;
+                        imageStudio.hasKey = !!String(talkSettings.naiApiKey || '').trim();
+                        imageStudio.keyHint = imageStudio.hasKey
+                            ? String(talkSettings.naiApiKey).slice(0, 4) + '…' + String(talkSettings.naiApiKey).slice(-2)
+                            : '';
+                    } catch(error) {
+                        console.warn('[Nido] 本地 NAI 设置读取失败：', error?.message || error);
+                    }
+                    return;
+                }
                 try {
                     const r = await fetch('/api/image/config', { credentials:'include', cache:'no-store' });
                     if (!r.ok) return;
@@ -399,6 +415,15 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
                 } catch(_) {}
             };
             const saveImageServer = async () => {
+                if (imageStudio.localMode) {
+                    imageStudio.saveStatus = '正在保存到本机…';
+                    try {
+                        talkSettings.imageProvider = 'novelai';
+                        saveNidoImageConfig();
+                        imageStudio.saveStatus = '已安全保存到本机 ✓';
+                    } catch(e) { imageStudio.saveStatus = '本机保存失败：' + (e?.message || e); }
+                    return;
+                }
                 imageStudio.saveStatus = '保存中…';
                 const body = buildImageConfigPayload({ includeKey:true });
                 try {
@@ -430,6 +455,23 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
             const testImageConnection = async () => {
                 imageStudio.testStatus = '测试中…';
                 try {
+                    const key = String(talkSettings.naiApiKey || '').trim();
+                    if (!key) throw new Error('请先填写 NovelAI API Key');
+                    if (imageStudio.localMode) {
+                        const base = normalizeImageBaseUrl(talkSettings.imageBaseUrl, 'novelai');
+                        if (base && !/(^https?:\\/\\/)?image\\.novelai\\.net\\/?$/i.test(base)) {
+                            imageStudio.testStatus = '第三方 NAI 地址已设置，请用下方“测试生图”验证实际出图';
+                            return;
+                        }
+                        if (!window.NidoNativeHttp?.getJson) throw new Error('当前 APK 缺少原生网络模块，请更新 APK');
+                        const r = await window.NidoNativeHttp.getJson('https://api.novelai.net/user/subscription', { Authorization:'Bearer ' + key, Accept:'application/json' });
+                        const j = await r.json().catch(() => ({}));
+                        if (!r.ok) throw new Error(r.nativeError || j.message || j.error || ('NovelAI 返回 HTTP ' + r.status));
+                        const tn = j.trainingStepsLeft || {};
+                        const anlas = Number(tn.fixedTrainingStepsLeft || 0) + Number(tn.purchasedTrainingStepsLeft || 0);
+                        imageStudio.testStatus = '连接成功 ✓' + (j.tier != null ? ' 套餐 ' + j.tier : '') + ' · 剩余 Anlas ' + anlas;
+                        return;
+                    }
                     const body = buildImageConfigPayload({ includeKey:true });
                     const r = await fetch('/api/image/test', { method:'POST', headers:{ 'Content-Type':'application/json' }, credentials:'include', body:JSON.stringify(body) });
                     const j = await parseImageJson(r);
@@ -443,7 +485,7 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
                     } else {
                         imageStudio.testStatus = '连接失败：' + (j.error || j.message || ('HTTP ' + r.status));
                     }
-                } catch(e) { imageStudio.testStatus = '连接失败：' + e.message; }
+                } catch(e) { imageStudio.testStatus = '连接失败：' + (e?.message || e); }
             };
             const addImagePreset = async () => {
                 const d = imageStudio.draft;
