@@ -95,3 +95,12 @@ These features may later be offered as optional add-ons, but the app must remain
 - Model discovery, image generation, TTS, proactive scheduling, and all other server-dependent modules still need separate local implementations. The app is not yet a complete backend-free release.
 
 - Added native HTTPS GET support and routed Talk's text-model discovery directly to the configured provider's `/models` endpoint. TTS and image model discovery remain server-dependent and are intentionally marked unavailable in local mode rather than silently calling the removed backend.
+
+### L2 local NovelAI image generation
+- Nido Android image generation is now being moved to a direct NovelAI path; the standalone APK is restricted to the NovelAI protocol for local image generation. OpenAI Images and generic image providers remain available only in the server-backed web build.
+- Added a native Android HTTPS POST bridge dedicated to NovelAI image responses. It blocks redirects and private/local destinations, reads the binary response, extracts up to four image files from NovelAI ZIP output, and returns image data URLs to the local UI. This avoids browser CORS and the old server-side `unzip` dependency.
+- NAI model/size/sampler/steps/scale/seed/negative prompt/SMEA/quality and V4/V4.5 multi-character prompt parameters are assembled on-device. Official `image.novelai.net` is the default; a third-party NovelAI-compatible Base URL can be supplied.
+- NAI API key uses the existing Android Keystore secret slot. Settings and artist prompt presets are saved locally; the most recent generated images are stored in IndexedDB. The local image settings no longer call `/api/image/config`, `/api/image/presets`, or `/api/image/generate`.
+- Added a local chat function tool for API providers. When the configured model requests `nido_generate_image`, Nido calls NovelAI directly and attaches the resulting image(s) to the assistant message. Generated image binaries are kept in IndexedDB rather than the small localStorage recovery snapshot.
+- Added web regression checks for the local NAI route, encrypted-key storage, native ZIP extraction, chat tool wiring, and local image persistence.
+- Not yet live-verified with the user's NovelAI key or on a physical Android device. GitHub Actions must pass native Java compilation and web/API tests before a new APK is considered installable. Third-party NAI endpoints may have provider-specific authentication/header requirements and need real-device testing.
