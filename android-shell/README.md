@@ -20,6 +20,6 @@ The shell does not bundle the Rifugio backend. Until a server is deployed and co
 
 - HTTPS only; cleartext HTTP is disabled.
 - No API keys or OpenCode/DeepSeek credentials are bundled in the APK.
-- API credentials belong in the Rifugio server-side settings, not in this Android shell.
+- Configure API credentials in Rifugio's provider settings after connecting. Never hardcode API keys or subscription tokens into this Android shell or commit them to the repository.
 - This initial shell does not yet include offline backend support, push notifications, file export integration, or signed in-app updates.
 - The same Android application ID is retained for future upgrades: `app.rifugio.shell`. A future release build must use a stable private signing key to upgrade this debug package safely.
