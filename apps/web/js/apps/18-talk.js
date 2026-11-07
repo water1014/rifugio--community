@@ -2244,8 +2244,9 @@ window.Rifugio.useTalk = function(ctx) {
                 if (window.NidoNative) {
                     talkSettings.systemNotifications = true;
                     saveTalkSettings();
-                    await enableNidoNativePush();
-                    talk.sessionNotice = '已请求开启 Nido 后台推送；请在 Android 系统弹窗中完成通知授权。';
+                    window.NidoNative.requestLocalNotifications?.();
+                    scheduleTalkProactive();
+                    talk.sessionNotice = '已请求 Android 通知授权。主动消息将由本机后台任务生成并通知，不需要云推送服务器。';
                     return true;
                 }
                 if (!('Notification' in window)) {
@@ -2343,16 +2344,13 @@ window.Rifugio.useTalk = function(ctx) {
             const testTalkWebPush = async () => {
                 if (window.NidoNative) {
                     try {
-                        const response = await fetch('/api/push/test', {
-                            method:'POST', credentials:'include',
-                            headers:{ 'Content-Type':'application/json' },
-                            body:JSON.stringify({ title:talkProfile.claudeName || 'Nido', body:'这是一条 Nido 原生通知测试。' }),
-                        });
-                        const result = await response.json();
-                        talk.sessionNotice = response.ok && result.ok
-                            ? '测试通知已发送：' + (result.result?.sent || 0) + '/' + (result.result?.total || 0)
-                            : (result.error || '原生通知发送失败。');
-                    } catch(error) { talk.sessionNotice = '原生通知发送失败：' + (error?.message || error); }
+                        window.NidoNative.showLocalNotification(
+                            talkProfile.claudeName || 'Nido',
+                            '这是一条 Nido 本机通知测试。',
+                            activeConvo.value?.id || talk.activeId || ''
+                        );
+                        talk.sessionNotice = '已发送本机通知测试。若没有弹出，请检查 Android 的 Nido 通知权限。';
+                    } catch(error) { talk.sessionNotice = '本机通知测试失败：' + (error?.message || error); }
                     return;
                 }
                 if (!('Notification' in window) || !talkSettings.systemNotifications || Notification.permission !== 'granted') {
