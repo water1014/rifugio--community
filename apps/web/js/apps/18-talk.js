@@ -66,7 +66,22 @@ window.Rifugio.useTalk = function(ctx) {
                         const local = localById.get(String(saved.id));
                         const byId = new Map();
                         (saved.messages || []).forEach(message => byId.set(String(message?.id ?? ('saved-' + byId.size)), message));
-                        (local?.messages || []).forEach(message => byId.set(String(message?.id ?? ('local-' + byId.size)), message));
+                        (local?.messages || []).forEach(message => {
+                            const id = String(message?.id ?? ('local-' + byId.size));
+                            const previous = byId.get(id);
+                            if (!previous) { byId.set(id, message); return; }
+                            const attachmentMap = new Map();
+                            (previous.attachments || []).forEach((item, index) => attachmentMap.set(String(item?.id ?? ('saved-attachment-' + index)), item));
+                            (message.attachments || []).forEach((item, index) => {
+                                const attachmentId = String(item?.id ?? ('local-attachment-' + index));
+                                const oldItem = attachmentMap.get(attachmentId) || {};
+                                attachmentMap.set(attachmentId, { ...oldItem, ...item, dataUrl:item?.dataUrl || oldItem?.dataUrl || '' });
+                            });
+                            byId.set(id, {
+                                ...previous, ...message,
+                                attachments:attachmentMap.size ? Array.from(attachmentMap.values()) : (message.attachments || previous.attachments || []),
+                            });
+                        });
                         const messages = Array.from(byId.values()).sort((a, b) => {
                             const left = Number(a?.id) || Date.parse(a?.created_at || '') || 0;
                             const right = Number(b?.id) || Date.parse(b?.created_at || '') || 0;
@@ -848,7 +863,16 @@ window.Rifugio.useTalk = function(ctx) {
                     //    被写进缓存，下次恢复漏拉整段历史（2026-07-02 聊天记录不显示的 bug 根因）。
                     const slim = talk.convos.map(c => {
                         const { _messagesLoaded, _messagesLoading, _messagesPageLoaded, _messagesHasMore, _messagesBefore, _olderMessagesLoading, _needsFullPush, ...rest } = c;
-                        return { ...rest, messages: (c.messages || []).slice(-30) };
+                        const messages = (c.messages || []).slice(-30).map(message => ({
+                            ...message,
+                            attachments:(message.attachments || []).map(attachment => {
+                                const dataUrl = String(attachment?.dataUrl || '');
+                                return dataUrl.startsWith('data:image/')
+                                    ? { ...attachment, dataUrl:'', localImageStoredInIndexedDB:true }
+                                    : attachment;
+                            }),
+                        }));
+                        return { ...rest, messages };
                     });
                     localStorage.setItem(TALK_LS, JSON.stringify({ convos: slim, activeId: talk.activeId, collapsedGroups:talk.collapsedGroups, customGroups:talk.customGroups }));
                 } catch(e) {}
