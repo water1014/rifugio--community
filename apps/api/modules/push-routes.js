@@ -1,8 +1,157 @@
 const crypto = require('crypto');
 
-function createPushRoutes({ readJsonSetting, writeJsonSetting }) {
+function createPushRoutes({ readJsonSetting, writeJsonSetting, isAuthed, encrypt, decrypt }) {
   const PUSH_VAPID_KEYS_KEY = 'push_vapid_keys';
   const PUSH_SUBSCRIPTIONS_KEY = 'push_subscriptions';
+  const ANDROID_PUSH_TOKENS_KEY = 'android_push_tokens';
+  let fcmAccessToken = '';
+  let fcmAccessTokenExpiresAt = 0;
+
+  function requireOwner(req, res) {
+    if (typeof isAuthed !== 'function' || !isAuthed(req)) {
+      res.status(401).json({ ok: false, error: 'authentication required' });
+      return false;
+    }
+    return true;
+  }
+
+  function readAndroidPushTokens() {
+    const rows = readJsonSetting(ANDROID_PUSH_TOKENS_KEY, []);
+    if (!Array.isArray(rows)) return [];
+    return rows.map(row => {
+      try {
+        const token = row.tokenEnc && typeof decrypt === 'function' ? decrypt(row.tokenEnc) : '';
+        return token ? { ...row, token } : null;
+      } catch (_) { return null; }
+    }).filter(Boolean);
+  }
+
+  function writeAndroidPushTokens(rows) {
+    writeJsonSetting(ANDROID_PUSH_TOKENS_KEY, (Array.isArray(rows) ? rows : [])
+      .filter(row => row && row.installationId && row.tokenEnc).slice(-20));
+  }
+
+  function upsertAndroidPushToken(input = {}) {
+    const token = String(input.token || '').trim();
+    const installationId = String(input.installationId || '').trim().slice(0, 120);
+    if (token.length < 20 || token.length > 4096 || /\\s/.test(token) || !installationId || typeof encrypt !== 'function') return null;
+    const rows = readJsonSetting(ANDROID_PUSH_TOKENS_KEY, []);
+    const next = Array.isArray(rows) ? rows.filter(row => row.installationId !== installationId) : [];
+    next.push({
+      id: crypto.createHash('sha256').update(installationId).digest('hex').slice(0, 24),
+      installationId,
+      tokenEnc: encrypt(token),
+      platform: 'android',
+      updatedAt: new Date().toISOString(),
+    });
+    writeAndroidPushTokens(next);
+    return { id: next[next.length - 1].id, count: next.length };
+  }
+
+  function removeAndroidPushToken(installationId) {
+    const id = String(installationId || '').trim();
+    if (!id) return 0;
+    const rows = readJsonSetting(ANDROID_PUSH_TOKENS_KEY, []);
+    const next = Array.isArray(rows) ? rows.filter(row => row.installationId !== id) : [];
+    writeAndroidPushTokens(next);
+    return (Array.isArray(rows) ? rows.length : 0) - next.length;
+  }
+
+  function readFcmServiceAccount() {
+    const raw = String(process.env.FCM_SERVICE_ACCOUNT_JSON || '').trim();
+    if (!raw) return null;
+    try {
+      const decoded = raw.startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf8');
+      const account = JSON.parse(decoded);
+      if (!account.client_email || !account.private_key || !account.project_id) return null;
+      return account;
+    } catch (_) { return null; }
+  }
+
+  async function getFcmAccessToken(account) {
+    if (fcmAccessToken && fcmAccessTokenExpiresAt > Date.now() + 60000) return fcmAccessToken;
+    const now = Math.floor(Date.now() / 1000);
+    const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+    const unsigned = encode({ alg: 'RS256', typ: 'JWT' }) + '.' + encode({
+      iss: account.client_email,
+      scope: 'https://www.googleapis.com/auth/firebase.messaging',
+      aud: 'https://oauth2.googleapis.com/token',
+      iat: now,
+      exp: now + 3600,
+    });
+    const signature = crypto.sign('RSA-SHA256', Buffer.from(unsigned), account.private_key).toString('base64url');
+    const assertion = unsigned + '.' + signature;
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        assertion,
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || !body.access_token) throw new Error('FCM OAuth token exchange failed: ' + (body.error_description || body.error || response.status));
+    fcmAccessToken = body.access_token;
+    fcmAccessTokenExpiresAt = Date.now() + Math.max(60, Number(body.expires_in || 3600)) * 1000;
+    return fcmAccessToken;
+  }
+
+  async function sendAndroidPushNotification(payload = {}) {
+    const account = readFcmServiceAccount();
+    if (!account) return { ok: false, unavailable: true, reason: 'FCM_SERVICE_ACCOUNT_JSON is not configured', sent: 0, failed: 0 };
+    const rows = readAndroidPushTokens();
+    if (!rows.length) return { ok: false, unavailable: true, reason: 'no Android devices registered', sent: 0, failed: 0 };
+    const projectId = String(process.env.FCM_PROJECT_ID || account.project_id).trim();
+    const accessToken = await getFcmAccessToken(account);
+    const alive = [];
+    let sent = 0, failed = 0;
+    for (const row of rows) {
+      try {
+        const data = Object.fromEntries(Object.entries({
+          app: 'nido',
+          conversationId: payload.conversationId || payload.convoId || '',
+          messageId: payload.messageId || '',
+          title: String(payload.title || 'Nido').slice(0, 80),
+          body: String(payload.body || '有一条新消息').slice(0, 180),
+        }).map(([key, value]) => [key, String(value)]));
+        const response = await fetch('https://fcm.googleapis.com/v1/projects/' + encodeURIComponent(projectId) + '/messages:send', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: {
+              token: row.token,
+              notification: { title: data.title, body: data.body },
+              data,
+              android: {
+                priority: 'HIGH',
+                notification: { channel_id: 'nido_messages', click_action: 'FLUTTER_NOTIFICATION_CLICK' },
+              },
+            },
+          }),
+          signal: AbortSignal.timeout(15000),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (response.ok) {
+          sent += 1;
+          alive.push(row);
+        } else {
+          failed += 1;
+          const errorText = JSON.stringify(result);
+          if (!/UNREGISTERED|registration-token-not-registered/i.test(errorText)) alive.push(row);
+        }
+      } catch (_) {
+        failed += 1;
+        alive.push(row);
+      }
+    }
+    if (alive.length !== rows.length) {
+      const stored = readJsonSetting(ANDROID_PUSH_TOKENS_KEY, []);
+      const aliveIds = new Set(alive.map(row => row.installationId));
+      writeAndroidPushTokens(Array.isArray(stored) ? stored.filter(row => aliveIds.has(row.installationId)) : []);
+    }
+    return { ok: sent > 0, sent, failed, total: rows.length };
+  }
   const WEB_PUSH_SUBJECT = process.env.WEB_PUSH_SUBJECT || 'mailto:admin@example.com';
   let webPushModule = null;
   let webPushLoadTried = false;
@@ -114,6 +263,18 @@ function createPushRoutes({ readJsonSetting, writeJsonSetting }) {
   }
 
   function mountPushRoutes(app) {
+    app.post('/api/push/android/register', (req, res) => {
+      if (!requireOwner(req, res)) return;
+      const saved = upsertAndroidPushToken(req.body || {});
+      if (!saved) return res.status(400).json({ ok: false, error: 'invalid Android push token or encryption unavailable' });
+      res.json({ ok: true, ...saved });
+    });
+
+    app.delete('/api/push/android/register', (req, res) => {
+      if (!requireOwner(req, res)) return;
+      res.json({ ok: true, removed: removeAndroidPushToken(req.body?.installationId || req.query.installationId || '') });
+    });
+
     app.get('/api/push/vapid-public-key', (_req, res) => {
       const keys = ensureVapidKeys();
       res.json({
@@ -152,6 +313,7 @@ function createPushRoutes({ readJsonSetting, writeJsonSetting }) {
 
   return {
     sendWebPushNotification,
+    sendAndroidPushNotification,
     mountPushRoutes,
   };
 }
