@@ -182,6 +182,7 @@ window.Rifugio.useTalk = function(ctx) {
   /* border-radius: 18px; */
 }`;
             const talk = reactive({
+                localAndroidMode:Boolean(window.NidoNative),
                 convos: [], activeId: null, input: '', thinking: false, error: '', listOpen: false,
                 attachments: [], panel: '', dictating: false,
                 appView: 'chats', chatView: 'list', profileEditCard:0,
@@ -1366,6 +1367,36 @@ window.Rifugio.useTalk = function(ctx) {
                 return lines.join('\n');
             };
             const buildTalkCharacterPrompt = (convo = activeConvo.value) => String(convo?.persona || '').trim();
+            const syncNidoProactiveContext = (convo = activeConvo.value) => {
+                if (!window.NidoNative?.setProactiveContext || !convo) return false;
+                const allMessages = Array.isArray(convo.messages) ? convo.messages : [];
+                const lastUser = allMessages.slice().reverse().find(message => message?.role === 'user');
+                const lastAny = allMessages[allMessages.length - 1];
+                const messages = allMessages.slice(-24)
+                    .filter(message => message && ['user', 'assistant'].includes(message.role))
+                    .map(message => ({
+                        role:message.role,
+                        content:String(messageContentForModel(message) || '').slice(0, 6000),
+                    }))
+                    .filter(message => message.content);
+                const lastUserAt = Number(lastUser?.id) || Date.parse(lastUser?.created_at || '') || 0;
+                const lastAnyAt = Number(lastAny?.id) || Date.parse(lastAny?.created_at || '') || lastUserAt;
+                try {
+                    window.NidoNative.setProactiveContext(JSON.stringify({
+                        conversationId:String(convo.id || ''),
+                        conversationName:String(convo.name || talkProfile.claudeName || 'Nido').slice(0, 80),
+                        messages,
+                        lastUserAt,
+                        lastAnyAt,
+                        systemPrompt:buildTalkContext(),
+                        characterPrompt:buildTalkCharacterPrompt(convo),
+                    }));
+                    return true;
+                } catch(error) {
+                    console.warn('[Nido] 本机主动消息上下文同步失败：', error?.message || error);
+                    return false;
+                }
+            };
             const talkLastMessage = (c) => {
                 const msg = c?.messages?.slice?.().reverse?.().find(m => m.content || m.attachments?.length);
                 if (!msg) {
@@ -2354,6 +2385,41 @@ window.Rifugio.useTalk = function(ctx) {
                 syncTalkProactiveSettingsToServer();
             };
             const syncTalkProactiveSettingsToServer = async () => {
+                if (window.NidoNative?.configureProactive) {
+                    try {
+                        const timezone = String(talkSettings.proactiveTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+                        const config = {
+                            enabled:!!talkSettings.proactiveEnabled,
+                            scriptEnabled:talkSettings.proactiveScriptEnabled !== false,
+                            minMinutes:talkSettings.proactiveMinMinutes,
+                            randomMinutes:talkSettings.proactiveRandomMinutes,
+                            quietSeconds:90,
+                            activeStart:talkSettings.proactiveStartTime || '08:00',
+                            activeEnd:talkSettings.proactiveEndTime || '23:30',
+                            timezone,
+                            prompt:talkSettings.proactiveText || '',
+                            conversationId:activeConvo.value?.id || talk.activeId || '',
+                            provider:talkSettings.apiProtocol || 'opencode-go',
+                            baseUrl:talkSettings.baseUrl || 'https://opencode.ai/zen/go',
+                            apiModel:talkSettings.apiModel || '',
+                            customHeaders:talkSettings.customHeaders || '{}',
+                            systemPrompt:buildTalkContext(),
+                            characterPrompt:buildTalkCharacterPrompt(activeConvo.value),
+                        };
+                        window.NidoNative.configureProactive(JSON.stringify(config));
+                        syncNidoProactiveContext(activeConvo.value);
+                        if (config.enabled && (!String(talkSettings.apiKey || '').trim() || !config.apiModel)) {
+                            talk.sessionNotice = '主动消息已打开，但还需要配置 API Key 和模型。';
+                        } else {
+                            talk.sessionNotice = config.enabled
+                                ? '本机后台主动消息已启用，Android 将按设定检查并发送通知。'
+                                : '本机后台主动消息已关闭。';
+                        }
+                    } catch(error) {
+                        talk.sessionNotice = '本机主动消息设置失败：' + (error?.message || error);
+                    }
+                    return;
+                }
                 try {
                     await fetch('/api/talk/proactive/settings', {
                         method:'PUT',
@@ -2383,6 +2449,35 @@ window.Rifugio.useTalk = function(ctx) {
                 } catch(_) {}
             };
             const pollTalkProactiveEvents = async () => {
+                if (window.NidoNative?.takePendingProactiveMessages) {
+                    try {
+                        const raw = window.NidoNative.takePendingProactiveMessages();
+                        const pending = JSON.parse(raw || '[]');
+                        for (const event of (Array.isArray(pending) ? pending : [])) {
+                            if (!event?.message || !event.conversationId) continue;
+                            let convo = talk.convos.find(item => String(item.id) === String(event.conversationId));
+                            if (!convo) {
+                                convo = normalizeTalkConvoMeta({
+                                    id:event.conversationId,
+                                    name:String(event.conversationName || talkProfile.claudeName || 'Nido'),
+                                    messages:[],
+                                    model:talkSettings.apiModel || 'API',
+                                });
+                                talk.convos.push(convo);
+                            }
+                            if (!Array.isArray(convo.messages)) convo.messages = [];
+                            if (!convo.messages.some(message => String(message.id) === String(event.message.id))) {
+                                convo.messages.push(event.message);
+                                saveTalk();
+                                showTalkToast(event.message, convo);
+                                if (activeConvo.value?.id === convo.id) scrollTalkBottom();
+                            }
+                        }
+                    } catch(error) {
+                        console.warn('[Nido] 本机主动消息读取失败：', error?.message || error);
+                    }
+                    return;
+                }
                 try {
                     const params = new URLSearchParams();
                     if (talkProactiveEventCursor) params.set('since', talkProactiveEventCursor);
@@ -2641,6 +2736,6 @@ window.Rifugio.useTalk = function(ctx) {
             Vue.watch(() => subTabs.museo, (v) => { if (v === 'talk') scrollTalkBottom(); });
 
 
-        return { TALK_LS, TALK_SETTINGS_LS, TALK_MOMENTS_LS, TALK_MODELS, TALK_IMESSAGE_CUSTOM_CSS_PRESET, TALK_COMPANION_CUSTOM_CSS_PRESET, TALK_CUSTOM_CSS_PLACEHOLDER, talk, terminalResume, talkSettings, stripBundledTalkPresetCss, strippedCustomCss, normalizeTalkTheme, normalizeTalkModel, talkScroll, TALK_VISIBLE_BATCH, talkVisibleMsgCount, talkVisibleConvoCount, talkProfile, saveTalkProfile, talkAiDisplayName, onTalkApiProtocolChange, profileCardsRef, profileCardIndex, relationshipDaysText, toggleProfileCardEdit, scrollProfileCard, onProfileCardsScroll, uploadTalkProfileImage, saveTalkSettings, clampNumber, clampInt, scopeTalkCustomCss, applyTalkCustomCss, insertTalkImessageCssPreset, insertTalkClaudeCssPreset, applyGlobalFont, ttsFetchRequestId, fetchProviderModels, talkToast, talkMomentsSyncTimer, talkMomentsLoading, queueTalkMomentsSync, loadTalkMomentsFromServer, normalizeTalkConvoMeta, makeTalkMomentId, normalizeTalkMomentForStorage, talkMomentsStoragePayload, writeTalkMomentsLocal, talkMomentSortTime, talkMomentUpdateTime, mergeTalkMoments, saveTalk, syncTalkMomentsToServer, activeConvo, talkConvoTitle, talkSortedConvos, talkVisibleConvos, talkConvosNeedMore, talkConvoRenderSummary, normalizeTalkGroupName, rememberTalkGroupName, talkGroupNames, talkGroupedConvos, toggleTalkConvoGroup, appendTalkSystemMessage, talkDisplayedMsgs, talkHasMore, loadMoreTalkMessages, talkMessageFontStyle, talkChatDetailStyle, talkMonitorTimer, talkProactiveTimer, talkServiceWorkerRegistration, talkServiceWorkerBound, talkProactivePollTimer, talkProactiveEventCursor, scrollTalkBottom, onTalkScrollTop, nowHM, nowForModel, imageUrlPattern, attachmentUrl, attachmentAudioUrl, normalAttachments, pokeTokenPattern, extractPokeRefs, stripPokeTokens, loosePokeText, generatedImagePattern, extractGeneratedImages, voiceTagPattern, toolUseMarkerPattern, stripToolUseMarkers, sanitizeTalkMessage, sanitizeTalkConvo, cleanMessageContent, extractVoiceTags, prepareTtsInput, cleanForTts, imageUrlPatternG, messageSegments, talkMessageSegments, talkMessagePokeSegments, talkMessageBodySegments, talkMessageSocialCards, socialLinksFromText, socialShareCopyFromText, socialPlaceholder, hydrateSocialCards, stripSocialLinksForDisplay, socialCardsPrompt, talkMessagePokeOnly, talkPokeSystemText, describeAttachmentForModel, messageContentForModel, promptWithAttachments, shouldSendAttachmentImage, attachmentPayloadForModel, buildTalkContext, buildTalkCharacterPrompt, talkLastMessage, talkLastTime, openTalkSection, backToTalkList, returnToTalkHome, openActiveTalk, openTalkSessionTools, TALK_TAIL_SYNC_COUNT, convoMetaPayload, pushConvo, pushConvoFull, pushConvoMeta, ensureConvoComplete, safePushConvoFull, convoMsgAbort, loadConvoMessages, refreshTalkMessages, loadConvosFromDB, loadMoreTalkConvos, onTalkConvoListScroll, newTalk, selectTalk, deleteTalk, renameTalk, renameTalkRemark, createTalkConvoGroup, moveTalkConvoToGroup, setTalkConvoGroup, toggleTalkPin, renameTalkConvoGroup, startTalkConvoDrag, endTalkConvoDrag, dropTalkConvoToGroup, onModelChange, countTalkUserTurns, buildTalkHandoffSummary, copyText, copyTalkSession, generateTalkHandoff, startNewClaudeSessionNextTurn, continueTalkInTerminal, terminalResumeCommand, copyTerminalResumeCommand, writeTerminalHandoff, sendTerminalShortcut, lastTalkEnterAt, lastTalkEnterPos, autoGrowTalk, handleTalkEnter, addTalkAttachment, onTalkImageSelect, removeTalkAttachment, uploadTalkAvatar, uploadVirtualCameraImage, togglePhoneInspect, requestPhoneInspectFromAi, rejectPhoneInspectRequest, acceptPhoneInspectRequest, captureStreamFrame, stopPhoneInspectShare, playTalkNotification, pushBase64ToUint8Array, ensureTalkWebPushSubscription, disableTalkWebPushSubscription, requestTalkNotificationPermission, enableNidoNativePush, handleTalkServiceWorkerMessage, registerTalkServiceWorker, postTalkServiceWorker, syncTalkServiceWorkerProactive, sendTalkExternalNotification, testTalkWebPush, showTalkToast, jumpToTalkToast, scheduleTalkProactive, syncTalkProactiveSettingsToServer, pollTalkProactiveEvents, triggerTalkProactive, pendingPokePayload, clearPendingPoke, sendTalk, postTalkActivity, pokeClaude };
+        return { TALK_LS, TALK_SETTINGS_LS, TALK_MOMENTS_LS, TALK_MODELS, TALK_IMESSAGE_CUSTOM_CSS_PRESET, TALK_COMPANION_CUSTOM_CSS_PRESET, TALK_CUSTOM_CSS_PLACEHOLDER, talk, terminalResume, talkSettings, stripBundledTalkPresetCss, strippedCustomCss, normalizeTalkTheme, normalizeTalkModel, talkScroll, TALK_VISIBLE_BATCH, talkVisibleMsgCount, talkVisibleConvoCount, talkProfile, saveTalkProfile, talkAiDisplayName, onTalkApiProtocolChange, profileCardsRef, profileCardIndex, relationshipDaysText, toggleProfileCardEdit, scrollProfileCard, onProfileCardsScroll, uploadTalkProfileImage, saveTalkSettings, clampNumber, clampInt, scopeTalkCustomCss, applyTalkCustomCss, insertTalkImessageCssPreset, insertTalkClaudeCssPreset, applyGlobalFont, ttsFetchRequestId, fetchProviderModels, talkToast, talkMomentsSyncTimer, talkMomentsLoading, queueTalkMomentsSync, loadTalkMomentsFromServer, normalizeTalkConvoMeta, makeTalkMomentId, normalizeTalkMomentForStorage, talkMomentsStoragePayload, writeTalkMomentsLocal, talkMomentSortTime, talkMomentUpdateTime, mergeTalkMoments, saveTalk, syncTalkMomentsToServer, activeConvo, talkConvoTitle, talkSortedConvos, talkVisibleConvos, talkConvosNeedMore, talkConvoRenderSummary, normalizeTalkGroupName, rememberTalkGroupName, talkGroupNames, talkGroupedConvos, toggleTalkConvoGroup, appendTalkSystemMessage, talkDisplayedMsgs, talkHasMore, loadMoreTalkMessages, talkMessageFontStyle, talkChatDetailStyle, talkMonitorTimer, talkProactiveTimer, talkServiceWorkerRegistration, talkServiceWorkerBound, talkProactivePollTimer, talkProactiveEventCursor, scrollTalkBottom, onTalkScrollTop, nowHM, nowForModel, imageUrlPattern, attachmentUrl, attachmentAudioUrl, normalAttachments, pokeTokenPattern, extractPokeRefs, stripPokeTokens, loosePokeText, generatedImagePattern, extractGeneratedImages, voiceTagPattern, toolUseMarkerPattern, stripToolUseMarkers, sanitizeTalkMessage, sanitizeTalkConvo, cleanMessageContent, extractVoiceTags, prepareTtsInput, cleanForTts, imageUrlPatternG, messageSegments, talkMessageSegments, talkMessagePokeSegments, talkMessageBodySegments, talkMessageSocialCards, socialLinksFromText, socialShareCopyFromText, socialPlaceholder, hydrateSocialCards, stripSocialLinksForDisplay, socialCardsPrompt, talkMessagePokeOnly, talkPokeSystemText, describeAttachmentForModel, messageContentForModel, promptWithAttachments, shouldSendAttachmentImage, attachmentPayloadForModel, buildTalkContext, buildTalkCharacterPrompt, talkLastMessage, talkLastTime, openTalkSection, backToTalkList, returnToTalkHome, openActiveTalk, openTalkSessionTools, TALK_TAIL_SYNC_COUNT, convoMetaPayload, pushConvo, pushConvoFull, pushConvoMeta, ensureConvoComplete, safePushConvoFull, convoMsgAbort, loadConvoMessages, refreshTalkMessages, loadConvosFromDB, loadMoreTalkConvos, onTalkConvoListScroll, newTalk, selectTalk, deleteTalk, renameTalk, renameTalkRemark, createTalkConvoGroup, moveTalkConvoToGroup, setTalkConvoGroup, toggleTalkPin, renameTalkConvoGroup, startTalkConvoDrag, endTalkConvoDrag, dropTalkConvoToGroup, onModelChange, countTalkUserTurns, buildTalkHandoffSummary, copyText, copyTalkSession, generateTalkHandoff, startNewClaudeSessionNextTurn, continueTalkInTerminal, terminalResumeCommand, copyTerminalResumeCommand, writeTerminalHandoff, sendTerminalShortcut, lastTalkEnterAt, lastTalkEnterPos, autoGrowTalk, handleTalkEnter, addTalkAttachment, onTalkImageSelect, removeTalkAttachment, uploadTalkAvatar, uploadVirtualCameraImage, togglePhoneInspect, requestPhoneInspectFromAi, rejectPhoneInspectRequest, acceptPhoneInspectRequest, captureStreamFrame, stopPhoneInspectShare, playTalkNotification, pushBase64ToUint8Array, ensureTalkWebPushSubscription, disableTalkWebPushSubscription, requestTalkNotificationPermission, enableNidoNativePush, handleTalkServiceWorkerMessage, registerTalkServiceWorker, postTalkServiceWorker, syncTalkServiceWorkerProactive, sendTalkExternalNotification, testTalkWebPush, showTalkToast, jumpToTalkToast, scheduleTalkProactive, syncTalkProactiveSettingsToServer, syncNidoProactiveContext, isNidoLocalApp, pollTalkProactiveEvents, triggerTalkProactive, pendingPokePayload, clearPendingPoke, sendTalk, postTalkActivity, pokeClaude };
     }
 };
