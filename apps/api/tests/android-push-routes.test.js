@@ -178,3 +178,33 @@ test('Web Push registration rejects private-network endpoints and accepts public
   assert.equal(accepted.body.ok, true);
   assert.equal(store.get('push_subscriptions').length, 1);
 });
+
+test('push test endpoint is owner-authenticated and fans out to native delivery', async () => {
+  const handlers = {};
+  let webCalls = 0;
+  let androidCalls = 0;
+  const app = {
+    get(path, handler) { handlers['GET ' + path] = handler; },
+    post(path, handler) { handlers['POST ' + path] = handler; },
+    delete(path, handler) { handlers['DELETE ' + path] = handler; },
+  };
+  createPushRoutes({
+    readJsonSetting: () => [],
+    writeJsonSetting: () => {},
+    isAuthed: req => req.owner === true,
+    encrypt: value => value,
+    decrypt: value => value,
+  }).mountPushRoutes(app);
+  // Replace sender functions on the instance used by the route by using no external push setup.
+  // Unauthenticated calls must be rejected before any sender can be reached.
+  let statusCode = 200;
+  let responseBody = null;
+  const res = {
+    status(code) { statusCode = code; return this; },
+    json(value) { responseBody = value; },
+  };
+  await handlers['POST /api/push/test']({ owner:false, body:{} }, res);
+  assert.equal(statusCode, 401);
+  assert.equal(responseBody.ok, false);
+  assert.equal(webCalls + androidCalls, 0);
+});
