@@ -1095,6 +1095,7 @@ window.Rifugio.useTalkStream = function(ctx) {
                 const storedContent = socialCards.length ? stripSocialLinksForDisplay(displayText || text) : (displayText || text);
                 const userMsg = { id:Date.now(), role:'user', content:storedContent, attachments, ...(socialCards.length ? { socialCards, socialSourceText:displayText || text } : {}), time:nowHM(), engine:responseEngine };
                 c.messages.push(userMsg);
+                if (window.NidoNative && typeof syncNidoProactiveContext === 'function') syncNidoProactiveContext(c);
                 if (c.name === '新对话' && c.messages.filter(m => m.role === 'user').length === 1) {
                     const seed = storedContent || shareText || (socialCards[0]?.platform === 'xhs' ? '小红书分享' : (socialCards.length ? 'X 分享' : '')) || attachments[0]?.name || '图片对话';
                     c.name = seed.slice(0, 18) + (seed.length > 18 ? '…' : '');
@@ -1282,6 +1283,7 @@ window.Rifugio.useTalkStream = function(ctx) {
                         assistantMsg.preview = false;
                         assistantMsg.done = true;
                         talk.sessionNotice = '';
+                        if (window.NidoNative && typeof syncNidoProactiveContext === 'function') syncNidoProactiveContext(c);
                         handleAssistantCallRequest(assistantMsg, c);
                         talk.thinking = false;
                         saveTalk(); pushConvo(c); scrollTalkBottom(); playTalkNotification(); showTalkToast(assistantMsg, c);
