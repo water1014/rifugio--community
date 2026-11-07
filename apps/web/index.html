@@ -2820,7 +2820,7 @@
 	                                    </label>
 	                                    <label class="talk-switch">
 	                                        <input type="checkbox" v-model="talkSettings.proactiveScriptEnabled">
-	                                        <span>允许注入主动脚本给 Claude</span>
+	                                        <span>允许 AI 按设定主动发起消息</span>
 	                                    </label>
 	                                    <div class="talk-settings-grid two">
 	                                        <input v-model.number="talkSettings.proactiveMinMinutes" type="number" min="1" max="1440" placeholder="最少多久未联系后触发（分钟）">
@@ -2833,7 +2833,7 @@
 	                                    <input v-model="talkSettings.proactiveTimezone" placeholder="主动脚本时区，例如 Asia/Kuala_Lumpur">
 	                                    <input v-model="talkSettings.proactiveText" placeholder="主动消息提示词 / 风格补充，可空；真正触发文案由后端按 X 分钟动态注入">
 		                                    <input v-model="talkSettings.barkUrl" placeholder="Bark URL：如 https://api.day.app/key/Title/Content?icon=...">
-		                                    <p class="talk-settings-note">Bark 不由前端自动推送。Claude 自己决定是否发、标题和正文；它可用工具 curl 发送，或输出 Bark 指令让后端按这个 URL 模板代发。</p>
+		                                    <p class="talk-settings-note">Bark 不由前端自动推送。Nido 的主动消息由你配置的 API 模型生成；Bark 仅作为额外通知通道。</p>
                                     <input v-model="talkSettings.globalFontUrl" placeholder="全局字体 URL（woff2/ttf/css）">
                                     <input v-model="talkSettings.globalFont" placeholder="字体名称，可选">
                                     <input v-model="talkSettings.chatBackgroundUrl" placeholder="聊天背景图 URL">
