@@ -240,6 +240,7 @@ window.Rifugio.useTalkVoice = function(ctx) {
             };
 
             const isTtsReady = computed(() => {
+                if (window.NidoNative) return 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
                 const provider = normalizeTtsProvider(talkSettings.ttsProvider);
                 const profile = normalizeTtsProfile(provider, collectTtsFields({ includeEmpty:true }));
                 return Boolean(provider && ttsHasCredentials(provider, profile) && profile.voiceId);
@@ -444,6 +445,22 @@ window.Rifugio.useTalkVoice = function(ctx) {
                 el.play().catch(() => { if (voiceState.playingId === id) voiceState.playingId = null; });
             };
 
+            const speakNidoSystemVoice = (text) => new Promise((resolve, reject) => {
+                if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
+                    reject(new Error('当前手机 WebView 不支持系统语音朗读。'));
+                    return;
+                }
+                try {
+                    window.speechSynthesis.cancel();
+                    const utterance = new SpeechSynthesisUtterance(String(text || ''));
+                    utterance.lang = sttCfg?.language || 'zh-CN';
+                    utterance.rate = 1;
+                    utterance.onend = () => resolve(true);
+                    utterance.onerror = (event) => reject(new Error(event?.error || '系统语音朗读失败'));
+                    window.speechSynthesis.speak(utterance);
+                } catch(error) { reject(error); }
+            });
+
             const makeSpeechRecognition = () => {
                 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
                 if (!SpeechRecognition) return null;
@@ -541,6 +558,7 @@ window.Rifugio.useTalkVoice = function(ctx) {
                 form.append('language', sttCfg?.language || 'zh-CN');
                 const controller = new AbortController();
                 const timeout = setTimeout(() => controller.abort(), 30000);
+                if (window.NidoNative) return ''; // Standalone uses the live Android/WebView speech-recognition transcript.
                 try {
                     const res = await fetch('/api/speech-to-text', {
                         method:'POST',
@@ -805,6 +823,7 @@ window.Rifugio.useTalkVoice = function(ctx) {
             const callTts = async (text) => {
                 const prepared = prepareTtsInput(text);
                 const body = buildTtsPayload(prepared.text, { voiceTags: prepared.voiceTags });
+                if (window.NidoNative) throw new Error('独立版使用手机系统语音，不调用服务器 TTS。');
                 return enqueueTtsRequest(body.provider, async () => {
                     const res = await fetch('/api/voice/synthesize', {
                         method:'POST', headers:{ 'Content-Type':'application/json' }, credentials:'include',
@@ -821,6 +840,18 @@ window.Rifugio.useTalkVoice = function(ctx) {
             const synthesizeAssistantVoice = async (assistantMsg, convo) => {
                 if (talkCall.active) return;   // 通话中由 speakCallReply 负责发声，别重复合成（省额度）
                 if (!talkSettings.aiVoiceReplyEnabled || !isTtsReady.value || !assistantMsg?.content) return;
+                if (window.NidoNative) {
+                    assistantMsg.voiceStatus = '正在使用手机系统语音朗读…';
+                    saveTalk(); if (convo) pushConvo(convo);
+                    try {
+                        await speakNidoSystemVoice(assistantMsg.content);
+                        assistantMsg.voiceStatus = '已使用手机系统语音朗读';
+                    } catch(error) {
+                        assistantMsg.voiceStatus = '系统语音不可用：' + String(error?.message || error).slice(0,70);
+                    }
+                    saveTalk(); if (convo) pushConvo(convo);
+                    return;
+                }
                 assistantMsg.voiceStatus = '正在生成 AI 语音条…';
                 saveTalk(); if (convo) pushConvo(convo);
                 try {
@@ -879,6 +910,15 @@ window.Rifugio.useTalkVoice = function(ctx) {
             // 设置里"试听"：用一句话测一下 key/音色/模型对不对，直接播
 
             const previewTtsVoice = async () => {
+                if (window.NidoNative) {
+                    if (!isTtsReady.value) { talkSettings.ttsPreviewStatus = '当前手机暂不支持系统语音朗读'; return; }
+                    talkSettings.ttsPreviewStatus = '正在调用手机系统语音…';
+                    try {
+                        await speakNidoSystemVoice('宝宝，这是手机系统语音试听。');
+                        talkSettings.ttsPreviewStatus = '系统语音试听成功 ✓';
+                    } catch(error) { talkSettings.ttsPreviewStatus = '试听失败：' + String(error?.message || error); }
+                    return;
+                }
                 if (!isTtsReady.value) { talkSettings.ttsPreviewStatus = normalizeTtsProvider(talkSettings.ttsProvider) === 'doubao' ? '先填 X-Api-Key、speaker 和 Resource ID' : '先选供应商，并填当前供应商的 Key 与音色 ID'; return; }
                 talkSettings.ttsPreviewStatus = '合成中…';
                 try {
