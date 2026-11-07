@@ -1559,28 +1559,25 @@
                 });
                 return String(await translator.translate(text) || '').trim();
             };
-            const translateDiaryWithClaude = async (text, profile) => {
+            const translateDiaryWithApi = async (text, profile) => {
                 const prompt = [
                     `请把下面这页私人日记翻译成${profile.targetName}。`,
                     '保留原来的温度、语气和换行；专有名词不要乱改；只输出译文，不要解释。',
                     '',
                     text
                 ].join('\n');
-                const r = await fetch(CLAUDE_AGENT_ENDPOINT, {
+                const r = await fetch('/api/settings/llm/complete', {
                     method:'POST',
                     headers:{ 'Content-Type':'application/json' },
+                    credentials:'include',
                     body:JSON.stringify({
                         prompt,
-                        conversation_id:'diary-translate',
-                        force_new_session:true,
-                        model:llm.model || 'default',
                         system_prompt:'你是一个安静可靠的私人日记翻译器。只输出译文。',
-                        options:{ include_partial_messages:true, includePartialMessages:true },
-                        stream:true,
                     }),
                 });
-                if (!r.ok) throw new Error('HTTP ' + r.status);
-                return readDiaryClaudeTranslation(r);
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok || !data.ok) throw new Error(data.error || ('HTTP ' + r.status));
+                return String(data.text || '').trim();
             };
             const translateDiaryPage = async () => {
                 const page = currentDiaryPage.value;
@@ -1606,7 +1603,7 @@
                 try {
                     let translated = '';
                     try { translated = await translateDiaryWithBrowser(text, profile); } catch(_) {}
-                    if (!translated) translated = await translateDiaryWithClaude(text, profile);
+                    if (!translated) translated = await translateDiaryWithApi(text, profile);
                     if (!translated) throw new Error('empty translation');
                     diaryUi.translation = translated;
                     diaryUi.translationOpen = true;
