@@ -22,7 +22,7 @@ Provider coverage must be audited separately for ordinary chat, Talk, proactive 
 
 ## Proactive messages and Android notifications
 
-The existing server already runs a background proactive scheduler and can send browser Web Push. However, its current proactive generation path calls `/api/terminal-chat/send`, which is tied to the Claude Code terminal runtime. This must be replaced by a provider-backed API call using encrypted server-side provider credentials and the correct conversation context.
+The existing server already runs a background proactive scheduler and can send browser Web Push. The active-message generation path has now been changed to call the selected API provider directly, using encrypted server-side credentials and the current conversation context. This implementation is committed on the feature branch but remains subject to CI and integration testing.
 
 The current Web Push subscription is a browser Service Worker subscription. It is not sufficient evidence that notifications will work in the Android WebView app after the app process is killed.
 
@@ -59,9 +59,9 @@ FCM needs an app-specific Firebase project configuration and server-side credent
 
 ## Delivery gates
 
-1. Audit current API provider paths and make CI green.
-2. Remove Claude subscription assumptions from the core Talk/proactive flow and move proactive generation to the selected provider.
-3. Add secure provider-credential storage for server-side scheduled tasks.
-4. Add native Android push registration, backend delivery, notification channels, and deep-link routing.
-5. Bundle the frontend, configure the backend endpoint without a user-facing URL prompt, and preserve local data.
+1. Finish the API-provider audit and make CI green; the Talk default and proactive-generation path have been moved to API mode, with tests added but not yet verified by a successful run.
+2. Complete the remaining Claude-dependency audit across memory, pet AI, image/vision, voice, and any terminal-only features.
+3. Implement native Android push registration, backend delivery, notification channels, and conversation deep-link routing.
+4. Bundle the frontend, configure the backend endpoint without a user-facing URL prompt, and preserve local data.
+5. Configure Firebase project credentials outside the repository and verify native push delivery.
 6. Build a signed release APK, test install/upgrade, and verify push while foregrounded, backgrounded, and after process termination on a physical Android device.
