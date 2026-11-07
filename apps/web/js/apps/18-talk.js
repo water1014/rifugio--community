@@ -422,6 +422,8 @@ window.Rifugio.useTalk = function(ctx) {
                 if (previousProtocol !== nextProtocol) {
                     if (talkSettings.apiModel) talkSettings.apiModelsByProvider[previousProtocol] = String(talkSettings.apiModel).trim();
                     talkSettings.apiModel = String(talkSettings.apiModelsByProvider[nextProtocol] || '').trim();
+                    talkSettings.availableTextModels = [];
+                    talkSettings.modelFetchStatus = '';
                     lastTalkApiProtocol = nextProtocol;
                     // Do not let the active conversation's old model silently leak into the newly selected provider.
                     if (activeConvo.value) {
