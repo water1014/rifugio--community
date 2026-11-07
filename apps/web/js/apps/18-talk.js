@@ -14,6 +14,7 @@ window.Rifugio.useTalk = function(ctx) {
             const NIDO_LOCAL_DB_NAME = 'nido-local-data-v1';
             let nidoLocalDbPromise = null;
             let nidoLocalPersistTimer = null;
+            let nidoProactiveContextSyncTimer = null;
             // Do not let an early UI save overwrite the full IndexedDB snapshot before restore finishes.
             let nidoLocalRestoreReady = !Boolean(window.NidoNative);
             const openNidoLocalDb = () => {
@@ -910,6 +911,16 @@ window.Rifugio.useTalk = function(ctx) {
                     nidoLocalPersistTimer = setTimeout(() => {
                         writeNidoLocalTalk().catch(error => console.warn('[Nido] 本地聊天保存失败：', error?.message || error));
                     }, 350);
+                }
+                // Keep the Android background worker in step with the latest chat.
+                // Debounce streaming saves so we only send one small context snapshot after typing settles.
+                if (window.NidoNative?.setProactiveContext) {
+                    clearTimeout(nidoProactiveContextSyncTimer);
+                    nidoProactiveContextSyncTimer = setTimeout(() => {
+                        nidoProactiveContextSyncTimer = null;
+                        const current = talk.convos.find(convo => String(convo.id) === String(talk.activeId));
+                        if (current) syncNidoProactiveContext(current);
+                    }, 700);
                 }
             };
             restoreNidoLocalTalk();
