@@ -931,6 +931,90 @@ window.Rifugio.useTalkStream = function(ctx) {
                 }
             };
 
+            let nidoNativeRequestSequence = 0;
+            const nidoNativePendingRequests = new Map();
+            window.__nidoNativeHttpResolve = (requestId, rawResult) => {
+                const pending = nidoNativePendingRequests.get(String(requestId || ''));
+                if (!pending) return;
+                nidoNativePendingRequests.delete(String(requestId));
+                clearTimeout(pending.timer);
+                try {
+                    const envelope = JSON.parse(String(rawResult || '{}'));
+                    const body = String(envelope.body || '');
+                    const status = Number(envelope.status || 0);
+                    pending.resolve({
+                        ok:status >= 200 && status < 300,
+                        status,
+                        text:async () => body,
+                        json:async () => JSON.parse(body || '{}'),
+                        nativeError:String(envelope.error || ''),
+                    });
+                } catch (error) {
+                    pending.reject(new Error('Android 网络桥返回了无法识别的数据'));
+                }
+            };
+            const nidoNativePostJson = (url, headers, payload) => new Promise((resolve, reject) => {
+                const bridge = window.NidoNative;
+                if (!bridge?.postJson) { reject(new Error('Android 原生网络桥不可用')); return; }
+                const requestId = 'nido-http-' + (++nidoNativeRequestSequence) + '-' + Date.now();
+                const timer = setTimeout(() => {
+                    nidoNativePendingRequests.delete(requestId);
+                    reject(new Error('请求超时，请检查网络或服务商状态'));
+                }, 165000);
+                nidoNativePendingRequests.set(requestId, { resolve, reject, timer });
+                try {
+                    bridge.postJson(requestId, String(url), JSON.stringify(headers || {}), JSON.stringify(payload || {}));
+                } catch (error) {
+                    clearTimeout(timer);
+                    nidoNativePendingRequests.delete(requestId);
+                    reject(new Error(error?.message || '无法启动 Android 网络请求'));
+                }
+            });
+            const nidoChatEndpoint = (baseUrl, protocol) => {
+                const clean = String(baseUrl || '').trim().replace(/\\/+$/, '');
+                if (!/^https:\\/\\//i.test(clean)) throw new Error('API 地址必须使用 HTTPS');
+                const parsed = new URL(clean);
+                if (parsed.hostname.toLowerCase() === 'opencode.ai') {
+                    if (/\\/zen\\/go$/i.test(parsed.pathname)) return clean + '/v1/chat/completions';
+                    if (/\\/inference\\/go\\/openai\\/v1$/i.test(parsed.pathname)) return clean + '/chat/completions';
+                    if (/\\/inference\\/go$/i.test(parsed.pathname)) return clean + '/openai/v1/chat/completions';
+                }
+                if (protocol === 'anthropic') throw new Error('本地版暂不支持 Anthropic Messages 协议，请选择 OpenCode Go、DeepSeek 或 OpenAI 兼容接口');
+                if (/\\/chat\\/completions$/i.test(clean)) return clean;
+                if (/\\/models$/i.test(clean)) return clean.replace(/\\/models$/i, '/chat/completions');
+                return clean + '/chat/completions';
+            };
+            const nidoProviderHeaders = () => {
+                const headers = { 'Content-Type':'application/json', Authorization:'Bearer ' + String(talkSettings.apiKey || '').trim() };
+                let custom = {};
+                const raw = String(talkSettings.customHeaders || '').trim();
+                if (raw) {
+                    try {
+                        custom = JSON.parse(raw);
+                        if (!custom || typeof custom !== 'object' || Array.isArray(custom)) throw new Error('自定义请求头必须是 JSON 对象');
+                    } catch (error) {
+                        throw new Error('自定义请求头 JSON 格式错误：' + (error?.message || ''));
+                    }
+                }
+                for (const [name, value] of Object.entries(custom)) {
+                    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,80}$/.test(name) || /[\\r\\n]/.test(String(value))) continue;
+                    const old = Object.keys(headers).find(key => key.toLowerCase() === name.toLowerCase());
+                    if (old) delete headers[old];
+                    headers[name] = String(value);
+                }
+                if (talkSettings.apiProtocol === 'opencode-go') {
+                    let session = '';
+                    try { session = localStorage.getItem('nido-opencode-session') || ''; } catch(_) {}
+                    if (!session) {
+                        session = 'ses_' + (window.crypto?.randomUUID?.().replace(/-/g, '').slice(0, 24) || (Date.now().toString(36) + Math.random().toString(36).slice(2, 14)));
+                        try { localStorage.setItem('nido-opencode-session', session); } catch(_) {}
+                    }
+                    if (!Object.keys(headers).some(key => key.toLowerCase() === 'x-opencode-session')) headers['x-opencode-session'] = session;
+                    if (!Object.keys(headers).some(key => key.toLowerCase() === 'user-agent')) headers['User-Agent'] = 'Nido/Android';
+                }
+                return headers;
+            };
+
             const sendTalkMessage = async (text, attachments=[], internalRetry = {}) => {
                 const retryInfo = internalRetry && typeof internalRetry === 'object' ? internalRetry : {};
                 const extraInstruction = String(retryInfo.extraInstruction || '').trim();
@@ -1022,22 +1106,32 @@ window.Rifugio.useTalkStream = function(ctx) {
                         const timeContext = talkSettings.timestampUserMessages !== false ? `[time: ${nowForModel()}]` : '';
                         const systemMessages = [timeContext, userContext, characterContext].filter(Boolean).map(content => ({ role:'system', content }));
                         const messages = [...systemMessages, ...history];
-                        const r = await fetch('/api/talk-api/v1/chat/completions', {
-                            method:'POST',
-                            credentials:'include',
-                            headers:{ 'Content-Type':'application/json' },
-                            body:JSON.stringify({
-                                provider:talkSettings.apiProtocol === 'anthropic' ? 'anthropic' : (['opencode-go', 'deepseek'].includes(talkSettings.apiProtocol) ? talkSettings.apiProtocol : 'compatible'),
-                                base_url:base,
-                                api_key:talkSettings.apiKey,
-                                custom_headers:talkSettings.customHeaders,
-                                model:talkSettings.apiModel,
-                                messages,
-                                temperature:.85,
-                                rifugio_experience:true,
-                                cache_namespace:'talk:' + c.id,
-                            }),
-                        });
+                        const providerPayload = {
+                            model:talkSettings.apiModel,
+                            messages,
+                            temperature:.85,
+                            stream:false,
+                        };
+                        const requestHeaders = nidoProviderHeaders();
+                        const requestEndpoint = nidoChatEndpoint(base, talkSettings.apiProtocol);
+                        const r = window.NidoNative?.postJson
+                            ? await nidoNativePostJson(requestEndpoint, requestHeaders, providerPayload)
+                            : await fetch('/api/talk-api/v1/chat/completions', {
+                                method:'POST',
+                                credentials:'include',
+                                headers:{ 'Content-Type':'application/json' },
+                                body:JSON.stringify({
+                                    provider:talkSettings.apiProtocol === 'anthropic' ? 'anthropic' : (['opencode-go', 'deepseek'].includes(talkSettings.apiProtocol) ? talkSettings.apiProtocol : 'compatible'),
+                                    base_url:base,
+                                    api_key:talkSettings.apiKey,
+                                    custom_headers:talkSettings.customHeaders,
+                                    model:talkSettings.apiModel,
+                                    messages,
+                                    temperature:.85,
+                                    rifugio_experience:true,
+                                    cache_namespace:'talk:' + c.id,
+                                }),
+                            });
                         if (!r.ok) {
                             const detailText = await r.text().catch(() => '');
                             let detail = detailText;
