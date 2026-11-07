@@ -2473,10 +2473,10 @@
                                         <p class="talk-settings-note">OpenCode Go 地址可使用 https://opencode.ai/zen/go。系统会自动处理接口路径和会话标识。</p>
                                         <label class="talk-settings-field-label">模型 ID</label>
                                         <div class="talk-settings-inline">
-                                            <input v-model="talkSettings.apiModel" @change="saveTalkSettings" placeholder="例如 deepseek-chat">
+                                            <input v-model="talkSettings.apiModel" @change="onModelChange" placeholder="例如 deepseek-chat">
                                             <button type="button" @click="fetchProviderModels('openai')">拉取模型</button>
                                         </div>
-                                        <select v-if="talkSettings.availableTextModels.length" v-model="talkSettings.apiModel" @change="saveTalkSettings">
+                                        <select v-if="talkSettings.availableTextModels.length" v-model="talkSettings.apiModel" @change="onModelChange">
                                             <option v-for="m in talkSettings.availableTextModels" :key="m.id || m" :value="m.id || m">{{ m.label || m.id || m }}</option>
                                         </select>
                                         <p v-if="talkSettings.modelFetchStatus" class="talk-settings-note">{{ talkSettings.modelFetchStatus }}</p>
