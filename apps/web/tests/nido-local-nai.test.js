@@ -177,3 +177,14 @@ test('standalone Nido moments and AI stickers stay on-device', () => {
   assert.match(stickers, /if \(window\.NidoNative\) \{[\s\S]*?persistLocalAiStickers\(\)/);
   assert.match(stickers, /if \(window\.NidoNative\) \{ persistLocalAiStickers\(\); return; \}/);
 });
+
+test('standalone Nido voice uses device speech and skips hosted speech endpoints', () => {
+  const voice = read('apps/web/js/apps/18-talk-voice.js');
+  const call = read('apps/web/js/apps/18-talk-call.js');
+  assert.match(voice, /const speakNidoSystemVoice = \(text\) => new Promise/);
+  assert.match(voice, /if \(window\.NidoNative\) return '';/);
+  assert.match(voice, /if \(window\.NidoNative\) return 'speechSynthesis' in window/);
+  assert.match(voice, /正在使用手机系统语音朗读/);
+  assert.match(voice, /系统语音试听成功/);
+  assert.match(call, /if \(window\.NidoNative \|\| !conversationId \|\| talkSettings\.executionMode !== 'terminal'\) return/);
+});
