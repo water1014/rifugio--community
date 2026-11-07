@@ -418,7 +418,7 @@ public class MainActivity extends Activity {
         String name = path.substring("/nido-images/".length());
         if (!name.matches("[a-zA-Z0-9_-]{1,80}\\.(png|webp|jpg)$")) return null;
         File target = new File(new File(getFilesDir(), "nido-images"), name);
-        if (!target.isFile()) return new WebResourceResponse("text/plain", "UTF-8", null);
+        if (!target.isFile()) return null;
         String mime = name.endsWith(".webp") ? "image/webp" : (name.endsWith(".jpg") ? "image/jpeg" : "image/png");
         try {
             WebResourceResponse response = new WebResourceResponse(mime, null, new FileInputStream(target));
@@ -429,7 +429,7 @@ public class MainActivity extends Activity {
             }
             return response;
         } catch (Exception error) {
-            return new WebResourceResponse("text/plain", "UTF-8", null);
+            return null;
         }
     }
 
