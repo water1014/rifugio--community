@@ -114,3 +114,25 @@ test('active conversation watcher is registered only after activeConvo initializ
   assert.ok(declaration >= 0, 'activeConvo must be declared');
   assert.ok(watcher > declaration, 'activeConvo watcher must be registered after declaration');
 });
+
+test('Nido Android is a standalone local-first app and does not require a hosted backend', () => {
+  const manifest = read('android-shell/app/src/main/AndroidManifest.xml');
+  const gradle = read('android-shell/app/build.gradle');
+  const workflow = read('.github/workflows/android-apk.yml');
+  const proactive = read('android-shell/app/src/main/java/app/rifugio/shell/NidoProactiveWorker.java');
+  const lock = read('apps/web/js/04-lock-screen.js');
+
+  assert.match(native, /LOCAL_APP_URL = "https:\/\/appassets\.androidplatform\.net\/index\.html"/);
+  assert.match(native, /webView\.loadUrl\(LOCAL_APP_URL\)/);
+  assert.match(native, /prefs\.edit\(\)\.putString\(KEY_SERVER, LOCAL_APP_URL\)/);
+  assert.match(native, /interceptPackagedAsset\(uri\)/);
+  assert.match(workflow, /cp -R apps\/web\/. android-shell\/app\/src\/main\/assets\//);
+  assert.match(talk, /const NIDO_LOCAL_DB_NAME = 'nido-local-data-v1'/);
+  assert.match(talk, /if \(isNidoLocalApp\(\)\) return Promise\.resolve\(\)/);
+  assert.match(proactive, /https:\/\/opencode\.ai\/zen\/go/);
+  assert.match(proactive, /Authorization/);
+  assert.match(native, /SECRET_KEY_ALIAS = "nido_android_secret_key_v1"/);
+  assert.match(lock, /hostname === 'appassets\.androidplatform\.net'/);
+  assert.doesNotMatch(manifest, /INTERNET.*required="true"/);
+  assert.match(gradle, /androidx\.work:work-runtime/);
+});
