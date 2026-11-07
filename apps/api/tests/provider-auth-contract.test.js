@@ -65,7 +65,7 @@ test('all OpenAI-compatible community proxies keep Bearer auth server-side', { c
   global.fetch = async (url, options = {}) => {
     const target = String(url);
     const headers = new Headers(options.headers || {});
-    seen.push({ target, authorization: headers.get('authorization'), method: options.method || 'GET' });
+    seen.push({ target, authorization: headers.get('authorization'), clientTag: headers.get('x-client-tag'), apiKey: headers.get('x-api-key'), method: options.method || 'GET' });
     assert.equal(headers.get('authorization'), 'Bearer ' + expectedKey, target);
     if (target.endsWith('/models')) {
       return new Response(JSON.stringify({ data: [{ id: 'gpt-contract' }] }), {
@@ -130,7 +130,7 @@ test('all OpenAI-compatible community proxies keep Bearer auth server-side', { c
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         provider: 'openai', base_url: 'https://api.openai.com/v1', api_key: expectedKey,
-        model: 'gpt-contract', messages: [{ role: 'user', content: 'ping' }],
+        model: 'gpt-contract', messages: [{ role: 'user', content: 'ping' }], custom_headers: { 'X-Client-Tag': 'rifugio-contract' },
       }),
     });
     assert.equal(response.status, 200, prefix + '/chat/completions');
@@ -139,4 +139,7 @@ test('all OpenAI-compatible community proxies keep Bearer auth server-side', { c
 
   assert.equal(seen.length, 7);
   assert.ok(seen.every(item => item.authorization === 'Bearer ' + expectedKey));
+  const communityProxyCalls = seen.filter(item => item.target.includes('relay') || item.clientTag);
+  assert.equal(communityProxyCalls.length, 4);
+  assert.ok(communityProxyCalls.every(item => item.clientTag === 'rifugio-contract'));
 });
