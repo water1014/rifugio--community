@@ -93,3 +93,13 @@ The Android/Rifugio setup must support all three user-requested routes:
 - FCM is optional and inactive until a Firebase `google-services.json` and server-side `FCM_SERVICE_ACCOUNT_JSON` are provisioned. UnifiedPush requires a compatible distributor installed/configured on the device. No live push delivery has been verified on hardware.
 - The first-run manual server URL screen remains. A stable production backend/domain and deployment configuration are required before a ready-to-use consumer APK can be produced.
 - Push registration and notification tap navigation must be verified end-to-end with the actual authenticated owner session. Do not treat successful Gradle compilation as push-delivery acceptance.
+
+
+## Latest build verification (2026-11-07, run 143)
+
+- Workflow run `42361622886` for commit `f336013cd3d8c537601fc6568d49dcf353696e5e` completed successfully after the duplicate push bootstrap was removed.
+- API contract tests: passed. Web tests: passed. Gradle `assembleDebug`: passed. Artifact upload: passed.
+- Artifact `nido-android-debug-apk`: 4,403,282 bytes, SHA-256 `872df79e9bb84c577d3a508c2bed931b9fcbd2535d8e2bfb3db08350ba374b6c`, expires 2026-11-21.
+- This is still a debug APK. No backend host, production domain, signing key, Firebase project, or physical-device acceptance test is configured. The app still requires manual server URL setup. Do not distribute this as the final Nido app.
+- Existing deployment architecture is Docker Compose with a persistent `./data` directory and `./private` secrets/profile directory. A public HTTPS domain, persistent-volume host, reverse proxy/TLS, strong generated secrets, and backup policy are prerequisites. Static GitHub Pages cannot host the API and database.
+- UnifiedPush registration is user-initiated from Talk settings using the server VAPID public key; the app asks Android to select a compatible distributor. It is not automatic on first launch and cannot guarantee delivery if no distributor is installed or device battery policy blocks it.
