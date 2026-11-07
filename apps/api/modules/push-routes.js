@@ -307,14 +307,28 @@ function createPushRoutes({ readJsonSetting, writeJsonSetting, isAuthed, encrypt
     });
 
     app.post('/api/push/test', async (req, res) => {
+      if (!requireOwner(req, res)) return;
       try {
-        const result = await sendWebPushNotification({
+        const payload = {
           title: req.body?.title || 'Nido',
           body: req.body?.body || '系统通知测试成功。',
-          tag: 'rifugio-test',
-          data: { app: 'talk', test: true },
-        });
-        res.json({ ok: true, result });
+          tag: 'nido-test',
+          conversationId: '',
+          messageId: '',
+          data: { app: 'nido', test: true },
+        };
+        const [web, android] = await Promise.all([
+          sendWebPushNotification(payload),
+          sendAndroidPushNotification(payload),
+        ]);
+        const result = {
+          sent: Number(web.sent || 0) + Number(android.sent || 0),
+          total: Number(web.total || 0) + Number(android.total || 0),
+          failed: Number(web.failed || 0) + Number(android.failed || 0),
+          web,
+          android,
+        };
+        res.json({ ok: Boolean(web.ok || android.ok), result });
       } catch (e) {
         res.status(500).json({ ok: false, error: e.message || String(e) });
       }
