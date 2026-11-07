@@ -5147,6 +5147,43 @@
 <script src="./js/apps/21-biblioteca.js?v=reading-nook-20260713"></script>
 <script src="./js/apps/21-room.js?v=crab-pet-chat-v11-20260714"></script>
 <script src="./js/apps/22-showroom.js?v=showroom-v1-20260715"></script>
+<script>
+(function () {
+    function report(title, detail) {
+        if (window.__NIDO_BOOT_ERROR_SHOWN__) return;
+        window.__NIDO_BOOT_ERROR_SHOWN__ = true;
+        var panel = document.createElement('div');
+        panel.setAttribute('role', 'alert');
+        panel.style.cssText = 'position:fixed;z-index:2147483647;inset:12px 12px auto;padding:14px 16px;border:1px solid #d58b9f;border-radius:14px;background:#fff7fa;color:#512b39;box-shadow:0 8px 30px rgba(0,0,0,.18);font:13px/1.5 system-ui;white-space:pre-wrap;overflow-wrap:anywhere;max-height:45vh;overflow:auto;';
+        var heading = document.createElement('strong');
+        heading.textContent = 'Nido 启动诊断：' + title;
+        var body = document.createElement('div');
+        body.style.marginTop = '8px';
+        body.textContent = String(detail || '未提供错误详情');
+        panel.appendChild(heading);
+        panel.appendChild(body);
+        document.body.appendChild(panel);
+    }
+    window.__NIDO_REPORT_BOOT_ERROR__ = report;
+    window.addEventListener('error', function (event) {
+        var target = event.target;
+        if (target && target !== window && target.src) {
+            report('资源加载失败', target.src);
+            return;
+        }
+        report('JavaScript 错误', [event.message, event.filename, event.lineno, event.error && event.error.stack].filter(Boolean).join('\n'));
+    }, true);
+    window.addEventListener('unhandledrejection', function (event) {
+        var reason = event.reason;
+        report('异步任务失败', reason && (reason.stack || reason.message) || String(reason));
+    });
+    window.addEventListener('load', function () {
+        setTimeout(function () {
+            if (!window.__NIDO_VUE_APP_MOUNTED__) report('主应用没有完成挂载', 'Vue 主应用未能启动。请把此诊断框截图发回，便于定位具体失败模块。');
+        }, 1800);
+    });
+})();
+</script>
 <script src="./js/05-vue-app.js?v=android-toy-bindings-20260723"></script>
 <!-- iOS 键盘处理：只调整 App 内容高度，绝不平移 body 或缩短全屏锁屏。 -->
 <script src="./js/06-viewport-keyboard-fix.js"></script>
