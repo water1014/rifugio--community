@@ -874,13 +874,21 @@
 
             <div v-if="settingsPanel === 'memory'" class="phone-settings-card settings-big-card">
                 <p class="text-[9px] uppercase tracking-widest text-gold/70 mb-4">LLM · 记忆导入引擎</p>
+                <label>API 服务</label>
+                <select v-model="memSettings.provider" @change="onMemProviderChange">
+                    <option value="opencode-go">OpenCode Go 订阅</option>
+                    <option value="deepseek">DeepSeek 官方 API</option>
+                    <option value="compatible">其他 OpenAI 兼容接口</option>
+                </select>
                 <label>Base URL</label>
-                <input v-model="memSettings.base_url" placeholder="https://api.deepseek.com/v1">
-                <label>API Key</label>
-                <input v-model="memSettings.api_key" type="password" placeholder="sk-...">
+                <input v-model="memSettings.base_url" placeholder="OpenCode Go: https://opencode.ai/zen/go">
+                <label>API Key / 订阅令牌</label>
+                <input v-model="memSettings.api_key" type="password" placeholder="填写当前服务的 Key">
+                <label>自定义请求头（JSON，可选）</label>
+                <textarea v-model="memSettings.custom_headers" rows="3" placeholder='{"X-Client-Tag":"Nido"}'></textarea>
                 <label>Model</label>
                 <div class="flex gap-2 items-center mb-2">
-                    <input v-model="memSettings.model" class="!mb-0" placeholder="deepseek-v4-flash">
+                    <input v-model="memSettings.model" class="!mb-0" placeholder="填写服务商提供的模型 ID">
                     <button @click="fetchModels" class="soft-btn flex-shrink-0">↻ 获取模型</button>
                 </div>
                 <div v-if="availableModels.length" class="mb-3 flex flex-wrap gap-2">
