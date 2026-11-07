@@ -178,7 +178,7 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
                         request.onerror = () => reject(request.error || new Error('图片读取失败'));
                     });
                     if (snapshot && Array.isArray(snapshot.images)) {
-                        imageStudio.testImages = snapshot.images.filter(value => String(value).startsWith('data:image/'));
+                        imageStudio.testImages = snapshot.images.filter(value => String(value).startsWith('https://appassets.androidplatform.net/nido-images/') || String(value).startsWith('data:image/'));
                         if (imageStudio.testImages.length) imageStudio.testGenerateStatus = '已从本机恢复最近一次 NAI 生图';
                     }
                 } catch(error) {
@@ -330,7 +330,7 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
                     Accept:'application/x-zip-compressed, application/zip, image/png, image/webp, application/json',
                 }, payload);
                 if (!response.ok) throw new Error(response.nativeError || 'NovelAI 请求失败（HTTP ' + response.status + '）');
-                const images = Array.isArray(response.imageDataUrls) ? response.imageDataUrls : (response.imageDataUrl ? [response.imageDataUrl] : []);
+                const images = Array.isArray(response.imageUrls) ? response.imageUrls : (response.imageUrl ? [response.imageUrl] : []);
                 if (!images.length) throw new Error(response.nativeError || 'NovelAI 没有返回图片');
                 await saveLatestNaiImages(images, payload.input);
                 return { images, prompt:payload.input, seed:payload.parameters.seed, model:payload.model };
