@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const dns = require('node:dns').promises;
 const { createPushRoutes } = require('../modules/push-routes');
 
 test('Android push tokens require an authenticated owner and are encrypted at rest', () => {
@@ -126,4 +127,54 @@ test('Android push sender uses FCM HTTP v1 with the notified conversation identi
   assert.equal(fcmRequest.body.message.data.messageId, 'message-99');
   assert.equal(fcmRequest.body.message.android.priority, 'HIGH');
   assert.equal(fcmRequest.body.message.android.notification.channel_id, 'nido_messages');
+});
+
+test('Web Push registration rejects private-network endpoints and accepts public HTTPS endpoints', async t => {
+  const originalLookup = dns.lookup;
+  dns.lookup = async hostname => {
+    if (hostname === '127.0.0.1' || hostname === 'localhost') return [{ address:'127.0.0.1', family:4 }];
+    return [{ address:'8.8.8.8', family:4 }];
+  };
+  t.after(() => { dns.lookup = originalLookup; });
+
+  const handlers = {};
+  const store = new Map();
+  const app = {
+    get(path, handler) { handlers['GET ' + path] = handler; },
+    post(path, handler) { handlers['POST ' + path] = handler; },
+    delete(path, handler) { handlers['DELETE ' + path] = handler; },
+  };
+  createPushRoutes({
+    readJsonSetting: (key, fallback) => store.has(key) ? store.get(key) : fallback,
+    writeJsonSetting: (key, value) => store.set(key, value),
+    isAuthed: req => req.owner === true,
+  }).mountPushRoutes(app);
+
+  const makeResponse = () => {
+    let statusCode = 200;
+    let body = null;
+    return {
+      status(code) { statusCode = code; return this; },
+      json(value) { body = value; },
+      get statusCode() { return statusCode; },
+      get body() { return body; },
+    };
+  };
+  const subscription = endpoint => ({
+    subscription: {
+      endpoint,
+      keys: { p256dh:'test-public-key', auth:'test-auth-secret' },
+    },
+  });
+
+  const blocked = makeResponse();
+  await handlers['POST /api/push/subscribe']({ owner:true, body:subscription('https://127.0.0.1/internal') }, blocked);
+  assert.equal(blocked.statusCode, 400);
+  assert.equal(store.get('push_subscriptions'), undefined);
+
+  const accepted = makeResponse();
+  await handlers['POST /api/push/subscribe']({ owner:true, body:subscription('https://push.example.test/send/opaque') }, accepted);
+  assert.equal(accepted.statusCode, 200);
+  assert.equal(accepted.body.ok, true);
+  assert.equal(store.get('push_subscriptions').length, 1);
 });
