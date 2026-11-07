@@ -191,11 +191,14 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
                 body.presets = Array.isArray(imageStudio.presets) ? imageStudio.presets : [];
                 body.activePresetId = imageStudio.activePresetId || '';
                 delete body.apiKey;
-                try { localStorage.setItem(NIDO_IMAGE_CONFIG_LS, JSON.stringify(body)); } catch(_) {}
                 const key = String(talkSettings.naiApiKey || '').trim();
-                try {
-                    if (window.NidoNative?.setSecret) window.NidoNative.setSecret('talk_nai_api_key', key);
-                } catch(_) {}
+                if (!window.NidoNative?.setSecret) throw new Error('Android 安全存储不可用，请重新打开 Nido 后再保存');
+                let secretSaved = false;
+                try { secretSaved = window.NidoNative.setSecret('talk_nai_api_key', key) === true; }
+                catch(error) { throw new Error('NovelAI 密钥未能写入 Android 安全存储：' + (error?.message || error)); }
+                if (!secretSaved) throw new Error('NovelAI 密钥未能写入 Android 安全存储，请重试');
+                try { localStorage.setItem(NIDO_IMAGE_CONFIG_LS, JSON.stringify(body)); }
+                catch(_) { throw new Error('图片设置保存失败，请检查手机剩余存储空间'); }
                 imageStudio.hasKey = !!key;
                 imageStudio.keyHint = key ? key.slice(0, 4) + '…' + key.slice(-2) : '';
                 return body;
