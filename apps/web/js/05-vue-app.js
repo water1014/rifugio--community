@@ -1677,7 +1677,7 @@
                 if (Array.isArray(savedPorts)) chatroomPorts.forEach(p => mergeRoomPort(p, savedPorts.find(x => x && x.id === p.id) || {}));
                 const ccRoomPort = chatroomPorts.find(p => p.id === 'cc');
                 if (ccRoomPort) {
-                    const legacyClaudeRoute = /^\\/api\\/chatroom-cc\\/v1(?:\\/|$)/.test(String(ccRoomPort.base_url || ''));
+                    const legacyClaudeRoute = /^\/api\/chatroom-cc\/v1(?:\/|$)/.test(String(ccRoomPort.base_url || ''));
                     if (ccRoomPort.provider === 'claude-code' || legacyClaudeRoute) {
                         ccRoomPort.provider = 'opencode-go';
                         ccRoomPort.base_url = 'https://opencode.ai/zen/go';
