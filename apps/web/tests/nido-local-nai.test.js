@@ -188,3 +188,11 @@ test('standalone Nido voice uses device speech and skips hosted speech endpoints
   assert.match(voice, /系统语音试听成功/);
   assert.match(call, /if \(window\.NidoNative \|\| !conversationId \|\| talkSettings\.executionMode !== 'terminal'\) return/);
 });
+
+test('Android packaged assets are served directly and boot diagnostics report real resource attributes', () => {
+  assert.equal((native.match(/WebResourceResponse direct = interceptPackagedAsset\(uri\)/g) || []).length, 2);
+  assert.match(native, /return packaged != null \? packaged : interceptPackagedAsset\(uri\)/);
+  assert.match(html, /target\.getAttribute\('src'\) \|\| target\.getAttribute\('href'\)/);
+  assert.match(html, /（没有设置 src\/href）/);
+  assert.doesNotMatch(html, /target && target !== window && target\.src\)/);
+});
