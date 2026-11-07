@@ -46,7 +46,7 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const html = fs.readFileSync('apps/web/index.html', 'utf8');
-          const refs = [...html.matchAll(/<script\\s+src=[\"']([^\"']+)[\"']/g)].map(match => match[1]);
+          const refs = [...html.matchAll(/<script\s+src=["']([^"']+)["']/g)].map(match => match[1]);
           const missing = refs.filter(ref => !fs.existsSync(new URL(ref, 'file://' + process.cwd() + '/apps/web/index.html')));
           if (missing.length) throw new Error('Missing web app scripts: ' + missing.join(', '));
           console.log(`Validated ${refs.length} script references and all JavaScript syntax.`);
