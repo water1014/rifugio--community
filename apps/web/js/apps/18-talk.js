@@ -1872,6 +1872,10 @@ window.Rifugio.useTalk = function(ctx) {
                 return output;
             };
             const ensureTalkWebPushSubscription = async () => {
+                if (window.NidoNative) {
+                    talkSettings.webPushStatus = 'Android 原生推送由 Nido 管理，不重复注册浏览器通知。';
+                    return false;
+                }
                 talkSettings.webPushEnabled = false;
                 if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
                     talkSettings.webPushStatus = '当前浏览器不支持 Web Push；保留前台系统通知。';
@@ -1944,6 +1948,13 @@ window.Rifugio.useTalk = function(ctx) {
                 }
             };
             const requestTalkNotificationPermission = async () => {
+                if (window.NidoNative) {
+                    talkSettings.systemNotifications = true;
+                    saveTalkSettings();
+                    await enableNidoNativePush();
+                    talk.sessionNotice = '已请求开启 Nido 后台推送；请在 Android 系统弹窗中完成通知授权。';
+                    return true;
+                }
                 if (!('Notification' in window)) {
                     talk.sessionNotice = '当前浏览器不支持系统通知。';
                     return false;
@@ -2037,6 +2048,20 @@ window.Rifugio.useTalk = function(ctx) {
                 }
             };
             const testTalkWebPush = async () => {
+                if (window.NidoNative) {
+                    try {
+                        const response = await fetch('/api/push/test', {
+                            method:'POST', credentials:'include',
+                            headers:{ 'Content-Type':'application/json' },
+                            body:JSON.stringify({ title:talkProfile.claudeName || 'Nido', body:'这是一条 Nido 原生通知测试。' }),
+                        });
+                        const result = await response.json();
+                        talk.sessionNotice = response.ok && result.ok
+                            ? '测试通知已发送：' + (result.result?.sent || 0) + '/' + (result.result?.total || 0)
+                            : (result.error || '原生通知发送失败。');
+                    } catch(error) { talk.sessionNotice = '原生通知发送失败：' + (error?.message || error); }
+                    return;
+                }
                 if (!('Notification' in window) || !talkSettings.systemNotifications || Notification.permission !== 'granted') {
                     const ok = await requestTalkNotificationPermission();
                     if (!ok) return;
@@ -2331,7 +2356,7 @@ window.Rifugio.useTalk = function(ctx) {
                 talkMonitorTimer = setInterval(syncTalkMonitor, 20000);
                 registerTalkServiceWorker().then(() => {
                     syncTalkServiceWorkerProactive();
-                    if (talkSettings.systemNotifications && 'Notification' in window && Notification.permission === 'granted') {
+                    if (!window.NidoNative && talkSettings.systemNotifications && 'Notification' in window && Notification.permission === 'granted') {
                         ensureTalkWebPushSubscription().catch(() => false);
                     }
                 });
