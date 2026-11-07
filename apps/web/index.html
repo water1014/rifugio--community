@@ -887,7 +887,7 @@
                     <button v-for="m in availableModels.slice(0, 20)" :key="m" @click="memSettings.model=m" class="text-[10px] px-2 py-1 rounded-full border border-gold/20 text-gold/80 bg-white/30">{{ m }}</button>
                 </div>
                 <button @click="saveMemSettings" class="soft-btn text-white" style="background: rgba(216,141,165,.82);">保存</button>
-                <p class="settings-muted-note">只管理“记忆导入 LLM”，不会覆盖 Talk App 的 Claude Agent 和聊天室端口。</p>
+                <p class="settings-muted-note">只管理“记忆导入 LLM”，不会覆盖 Talk App 的 API 设置和聊天室端口。</p>
             </div>
 
             <div v-else-if="settingsPanel === 'pet'" class="phone-settings-card settings-big-card pet-ai-settings-card">
@@ -2793,11 +2793,11 @@
                                         <option value="rounded">头像圆角方形</option>
                                         <option value="square">头像方形</option>
                                     </select>
-                                    <input v-model="talkSettings.pokeTextToAi" placeholder="你戳 Claude 的文案，例如：戳了戳你">
-                                    <input v-model="talkSettings.pokeTextFromAi" placeholder="Claude 戳你的文案，例如：轻轻戳了戳你">
+                                    <input v-model="talkSettings.pokeTextToAi" placeholder="你戳 AI 的文案，例如：戳了戳你">
+                                    <input v-model="talkSettings.pokeTextFromAi" placeholder="AI 戳你的文案，例如：轻轻戳了戳你">
                                     <label class="talk-switch">
                                         <input type="checkbox" v-model="talkSettings.aiIncomingCallEnabled">
-                                        <span>允许 Claude 用 [[call:原因]] 主动来电</span>
+                                        <span>允许 AI 用 [[call:原因]] 主动来电</span>
                                     </label>
                                     <label class="talk-switch" style="display:flex;align-items:center;gap:8px;">
                                         <span style="white-space:nowrap;">通话停顿判定 {{ ((Number(talkSettings.callSilenceHoldMs)||2200)/1000).toFixed(1) }}s</span>
