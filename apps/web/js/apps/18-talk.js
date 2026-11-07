@@ -200,6 +200,7 @@ window.Rifugio.useTalk = function(ctx) {
                 apiKey: '',
                 apiModel: '',
                 apiProtocol: 'compatible',
+                customHeaders: '',
                 claudeModel: 'default',
                 ttsProvider: '',
                 ttsApiKey: '',
