@@ -107,3 +107,10 @@ test('NovelAI locked character presets override model guesses and work on older 
   assert.match(studio, /\.\.\.\(!isV4Model \? characters : \[\]\)/);
   assert.match(studio, /if \(isV4Model\) \{/);
 });
+
+test('active conversation watcher is registered only after activeConvo initialization', () => {
+  const declaration = talk.indexOf('const activeConvo = Vue.computed(');
+  const watcher = talk.indexOf('Vue.watch(() => activeConvo.value?.id');
+  assert.ok(declaration >= 0, 'activeConvo must be declared');
+  assert.ok(watcher > declaration, 'activeConvo watcher must be registered after declaration');
+});
