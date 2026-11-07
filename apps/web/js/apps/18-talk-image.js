@@ -208,11 +208,18 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
                 const preset = imageStudio.presets.find(p => p && p.id === (options.presetId || imageStudio.activePresetId)) || null;
                 const presetChars = preset?.character ? String(preset.character).split(/\n+/).map(v => v.trim()).filter(Boolean) : [];
                 const requestedCharacters = Array.isArray(options.characters) ? options.characters.map(value => String(value || '').trim()).filter(Boolean).slice(0, 6) : null;
-                const characters = requestedCharacters || (preset?.lockCharacters && presetChars.length
-                    ? presetChars
-                    : (presetChars.length > 1 ? presetChars : []));
+                // A locked preset is the source of truth: model-suggested character tags must not replace it.
+                const lockedCharacters = preset?.lockCharacters && presetChars.length ? presetChars : null;
+                const characters = lockedCharacters || requestedCharacters || (presetChars.length > 1 ? presetChars : []);
+                const isV4Model = /^nai-diffusion-4/i.test(String(config.model || ''));
                 const singleCharacter = !characters.length && presetChars.length === 1 ? presetChars[0] : '';
-                const positive = [preset?.prompt, singleCharacter, scene].map(v => String(v || '').trim()).filter(Boolean).join(', ');
+                // Older NAI models do not accept V4 characterPrompts, so include character tags in input.
+                const positive = [
+                    preset?.prompt,
+                    singleCharacter,
+                    ...(!isV4Model ? characters : []),
+                    scene,
+                ].map(v => String(v || '').trim()).filter(Boolean).join(', ');
                 if (!positive && !characters.length) throw new Error('没有正向提示词，请填写场景或选择画师预设组');
                 const negative = String(options.negative || preset?.negative || talkSettings.naiNegativePrompt || '').trim();
                 const seed = normalizeNaiSeed();
@@ -224,7 +231,7 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
                 parameters.legacy = false;
                 parameters.add_original_image = true;
                 parameters.legacy_v3_extend = false;
-                if (/^nai-diffusion-4/i.test(String(config.model || ''))) {
+                if (isV4Model) {
                     const centers = {
                         1:[0.5], 2:[0.45,0.55], 3:[0.3,0.5,0.7],
                         4:[0.25,0.42,0.58,0.75], 5:[0.2,0.35,0.5,0.65,0.8],
