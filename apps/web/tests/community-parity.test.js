@@ -15,6 +15,8 @@ assert.match(lock, /window\.fetch = async function guardedFetch/, 'protected req
 assert.ok(lock.includes('if (protectedRequest) await authReady;'), 'protected API calls must wait for login');
 assert.match(lock, /unauthorized\|browser login required/, 'expired browser sessions must return to the lock screen');
 assert.ok(!lock.includes('terminal verification required'), 'terminal step-up failures must not trigger the browser lock');
+assert.match(app, /fetch\('\/api\/settings\/llm\/complete'/, 'diary translation must use the saved API provider through the backend');
+assert.doesNotMatch(app, /translateDiaryWithClaude|fetch\(CLAUDE_AGENT_ENDPOINT/, 'diary translation must not depend on the Claude subscription relay');
 assert.ok(lock.includes("nativeFetch('/api/auth/logout'"), 'manual relock must invalidate the server cookie');
 
 assert.ok(app.includes('const DEFAULT_DOCK_ICONS = {};'), 'community App launchers must default to emoji or characters');
