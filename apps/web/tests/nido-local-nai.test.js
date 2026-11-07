@@ -203,7 +203,7 @@ test('OpenCode Go keeps a stable session header per conversation in chat and pro
   assert.match(stream, /nido-opencode-session:' \+ String\(conversationId \|\| 'default'\)/);
   assert.match(stream, /nidoProviderHeaders\(c\.id\)/);
   assert.match(stream, /x-opencode-session/);
-  assert.ok(stream.includes("User-Agent') = 'Nido/Android"));
+  assert.ok(stream.includes("headers['User-Agent'] = 'Nido/Android'"));
   const proactive = read('android-shell/app/src/main/java/app/rifugio/shell/NidoProactiveWorker.java');
   assert.match(proactive, /String conversationId = chat\.optString\("conversationId", "default"\)/);
   assert.match(proactive, /opencode_session_/);
