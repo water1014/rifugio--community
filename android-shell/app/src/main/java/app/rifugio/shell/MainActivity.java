@@ -110,6 +110,16 @@ public class MainActivity extends Activity {
         }
     }
 
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        // A notification tap can arrive while MainActivity and its WebView are already alive.
+        // In that case onPageFinished will not run again, so dispatch the deep link here.
+        if (webView != null && webView.getUrl() != null && isConfiguredServerPage(webView.getUrl())) {
+            dispatchPendingNotification(intent);
+        }
+    }
+
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
         NotificationChannel channel = new NotificationChannel(
