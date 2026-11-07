@@ -592,7 +592,7 @@ window.Rifugio.useMemoria = function(ctx) {
             };
 
             // -- Settings --
-            const memSettings    = reactive({ base_url:'', api_key:'', model:'' });
+            const memSettings    = reactive({ provider:'opencode-go', base_url:'https://opencode.ai/zen/go', api_key:'', model:'', custom_headers:'' });
             const availableModels = ref([]);
             const embedStatus    = ref(null);
             const embedBatchMsg  = ref('');
@@ -738,9 +738,11 @@ window.Rifugio.useMemoria = function(ctx) {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
+                            provider: memSettings.provider,
                             base_url: memSettings.base_url,
                             api_key: memSettings.api_key,
                             model: memSettings.model,
+                            custom_headers: memSettings.custom_headers,
                         }),
                     });
                     const j = await res.json();
@@ -750,11 +752,20 @@ window.Rifugio.useMemoria = function(ctx) {
                 } catch(e) { availableModels.value = []; alert('获取失败: '+e.message); }
             };
 
+            const onMemProviderChange = () => {
+                if (memSettings.provider === 'opencode-go' && (!memSettings.base_url || !memSettings.base_url.includes('opencode.ai'))) {
+                    memSettings.base_url = 'https://opencode.ai/zen/go';
+                } else if (memSettings.provider === 'deepseek' && (!memSettings.base_url || memSettings.base_url.includes('opencode.ai'))) {
+                    memSettings.base_url = 'https://api.deepseek.com/v1';
+                } else if (memSettings.provider === 'compatible' && (!memSettings.base_url || memSettings.base_url.includes('opencode.ai') || memSettings.base_url.includes('deepseek.com'))) {
+                    memSettings.base_url = 'https://api.openai.com/v1';
+                }
+            };
             const saveMemSettings = async () => {
                 await fetch('/api/settings/llm', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ base_url: memSettings.base_url, api_key: memSettings.api_key, model: memSettings.model })
+                    body: JSON.stringify({ provider: memSettings.provider, base_url: memSettings.base_url, api_key: memSettings.api_key, model: memSettings.model, custom_headers: memSettings.custom_headers })
                 });
                 alert('已保存 ✦');
             };
@@ -797,8 +808,12 @@ window.Rifugio.useMemoria = function(ctx) {
                 fetch('/api/settings/llm').then(r => r.json()).then(j => {
                     if (j.ok && j.data) {
                         if (j.data.base_url) memSettings.base_url = j.data.base_url;
+                        if (j.data.provider) memSettings.provider = j.data.provider;
+                        else if (String(j.data.base_url || '').includes('opencode.ai')) memSettings.provider = 'opencode-go';
+                        else memSettings.provider = 'compatible';
                         if (j.data.model)    memSettings.model    = j.data.model;
                         if (j.data.api_key)  memSettings.api_key  = j.data.api_key;
+                        if (j.data.custom_headers) memSettings.custom_headers = j.data.custom_headers;
                     }
                 }).catch(()=>{});
             };
