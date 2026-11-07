@@ -81,6 +81,8 @@ public class MainActivity extends Activity {
     static final String EXTRA_CONVERSATION_ID = "nido_conversation_id";
     static final String EXTRA_MESSAGE_ID = "nido_message_id";
     private WebView webView;
+    private ValueCallback<Uri[]> fileChooserCallback;
+    private static final int FILE_CHOOSER_REQUEST_CODE = 7401;
     private SharedPreferences prefs;
     private WebViewAssetLoader assetLoader;
     private final ExecutorService httpExecutor = Executors.newCachedThreadPool();
@@ -120,7 +122,23 @@ public class MainActivity extends Activity {
         settings.setAllowContentAccess(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
-        webView.setWebChromeClient(new WebChromeClient());
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback,
+                    FileChooserParams params) {
+                if (fileChooserCallback != null) fileChooserCallback.onReceiveValue(null);
+                fileChooserCallback = callback;
+                try {
+                    Intent chooser = params.createIntent();
+                    startActivityForResult(chooser, FILE_CHOOSER_REQUEST_CODE);
+                    return true;
+                } catch (Exception error) {
+                    fileChooserCallback = null;
+                    callback.onReceiveValue(null);
+                    android.util.Log.w("NidoFiles", "Could not open Android file picker", error);
+                    return false;
+                }
+            }
+        });
         webView.setWebViewClient(new WebViewClient() {
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
@@ -182,6 +200,19 @@ public class MainActivity extends Activity {
         prefs.edit().putString(KEY_SERVER, LOCAL_APP_URL).apply();
         attachNativeBridge();
         webView.loadUrl(LOCAL_APP_URL);
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
+            ValueCallback<Uri[]> callback = fileChooserCallback;
+            fileChooserCallback = null;
+            if (callback != null) {
+                Uri[] results = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
+                callback.onReceiveValue(results);
+            }
+            return;
+        }
+        super.onActivityResult(requestCode, resultCode, data);
     }
 
     @Override protected void onNewIntent(Intent intent) {
