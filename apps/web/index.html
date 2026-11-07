@@ -606,7 +606,7 @@
         </div>
 
         <div v-if="mainTab === 'game'" class="rifugio-game-frame-shell">
-            <iframe class="rifugio-game-board-frame" src="./games/spicy-monopoly/" title="Rifugio 游戏屋" allow="clipboard-write" loading="eager"></iframe>
+            <iframe class="rifugio-game-board-frame" src="./games/spicy-monopoly/" title="Nido 游戏屋" allow="clipboard-write" loading="eager"></iframe>
             <aside class="rifugio-game-terminal-drawer" :class="{ open: terminalChat.panel === 'game-terminal' }">
                 <button class="rifugio-game-terminal-head" type="button"
                     :aria-expanded="terminalChat.panel === 'game-terminal'"
@@ -704,7 +704,7 @@
 
                 <div class="crab-pet-dashboard">
                     <article class="crab-baby-card">
-                        <div class="crab-baby-stamp">RIFUGIO BABY · {{ petProfile.birthday || 'NEW' }}</div>
+                        <div class="crab-baby-stamp">NIDO BABY · {{ petProfile.birthday || 'NEW' }}</div>
                         <div class="crab-baby-main">
                             <span class="crab-baby-avatar"><img src="/pets/crab/idle.png" alt=""></span>
                             <div class="crab-baby-copy">
@@ -795,7 +795,7 @@
                         </header>
 
                         <button v-if="petUi.diaryView === 'cover'" class="crab-diary-cover" type="button" @click="petUi.openPetDiaryPages">
-                            <i>✦</i><span>RIFUGIO</span><b>{{ petProfileTitle }}<br>育儿手册</b><em>爸爸妈妈与小宝宝共同保管</em><strong>打开记录本</strong>
+                            <i>✦</i><span>NIDO</span><b>{{ petProfileTitle }}<br>育儿手册</b><em>爸爸妈妈与小宝宝共同保管</em><strong>打开记录本</strong>
                         </button>
 
                         <div v-else class="crab-diary-pages">
@@ -844,7 +844,7 @@
                             <button type="button" @click="petUi.clearPetChat" aria-label="清空聊天">↻</button>
                             <button type="button" @click="petUi.closePetChat" aria-label="关闭聊天">×</button>
                         </header>
-                        <div class="crab-chat-safety">🔒 只会读取宝宝资料、当前状态和近期育儿日记；没有工具、文件、终端或其他 Rifugio 记忆权限。</div>
+                        <div class="crab-chat-safety">🔒 只会读取宝宝资料、当前状态和近期育儿日记；没有工具、文件、终端或其他 Nido 记忆权限。</div>
                         <div class="crab-chat-thread" aria-live="polite">
                             <div v-for="message in petUi.chatMessages" :key="message.id" class="crab-chat-message" :class="[message.role,{error:message.error}]">
                                 <span v-if="message.role === 'assistant'">🦀</span><p>{{ message.content }}</p>
@@ -2795,7 +2795,7 @@
                                     <select v-model="talkSettings.theme">
                                         <option value="companion">Companion 暖白无气泡</option>
                                         <option value="imessage">iMessage 蓝白</option>
-                                        <option value="rifugio">Rifugio 粉色</option>
+                                        <option value="rifugio">Nido 粉色</option>
                                         <option value="wechat">仿微信</option>
                                     </select>
                                     <select v-model="talkSettings.avatarShape">
@@ -3894,7 +3894,7 @@
                                 </button>
                             </div>
                             <p v-else class="radio-cloud-empty">{{ radio.auth.playlistLoading ? '正在读取歌单…' : '暂时没有读到歌单，可点刷新重试' }}</p>
-                            <small class="radio-login-privacy">登录凭证只加密保存在你的 Rifugio 服务端，不会发送到浏览器，也不会读取网易云密码。</small>
+                            <small class="radio-login-privacy">登录凭证只加密保存在你的 Nido 服务端，不会发送到浏览器，也不会读取网易云密码。</small>
                         </div>
                         <div v-else-if="radio.auth.provider && !radio.auth.pickerOpen && radio.auth.status !== 'idle'" class="radio-login-result">
                             <div class="radio-login-result-head">
