@@ -15,7 +15,7 @@ Nido is a **standalone, local-first Android app**. It does not require a self-ho
 
 Chat, local conversation history, local memories (including Feel, manual edits, pin/archive/delete and keyword search), favorite quotes, moments/comments, AI sticker library, NovelAI generation, and scheduled proactive messages are designed to work without a Nido backend. Structured JSON memory files can be selected from Android's system file picker and imported locally.
 
-Server-dependent community features such as account login, cross-device sync, cloud backup, vector Embedding, automatic Dream/AI memory extraction, remote social feeds, and remote push-distributor registration are not part of the standalone Android flow yet. Local notifications do not require those services. Local keyword search does not upload memory content.
+Standalone voice input uses the device/WebView speech-recognition capability when available, and spoken AI replies use Android's system speech synthesis. It does not call the hosted `/api/speech-to-text` or `/api/voice/synthesize` endpoints. Availability and voice quality depend on the speech services installed on the phone; this is not a bundled offline speech engine. Server-dependent community features such as account login, cross-device sync, cloud backup, vector Embedding, automatic Dream/AI memory extraction, remote social feeds, and remote push-distributor registration are not part of the standalone Android flow yet. Local notifications do not require those services. Local keyword search does not upload memory content.
 
 ## Build
 
