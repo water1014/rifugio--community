@@ -19,11 +19,13 @@ After a successful run, open the workflow run's **Artifacts** section and downlo
 
 - A real Android app experience, not a URL-entry WebView wrapper.
 - Native notification permission handling and a high-importance Nido message channel are now scaffolded.
-- Firebase Messaging client service, encrypted device-token registration, and server-side FCM HTTP v1 delivery are implemented behind optional Firebase/service-account configuration.
-- Notification taps carry the conversation ID into the Talk UI; the UI registers the native token after authentication.
-- Firebase delivery is not active until a Firebase Android app config (`google-services.json`) is supplied at build time and `FCM_SERVICE_ACCOUNT_JSON` (or base64-encoded JSON) is configured on the server. No Firebase credentials belong in Git.
+- UnifiedPush 3.3.5 connector is included as the primary cross-vendor Android transport. It lets the user select an installed push distributor, stores the Web Push endpoint/keys locally, and reuses the server's existing VAPID/Web Push sender.
+- The native push service decrypts incoming UnifiedPush payloads, posts a high-importance Android notification, and routes taps to the correct Talk conversation.
+- The Talk settings include an explicit “开启后台推送” action. After distributor registration, the app uploads the endpoint to the authenticated backend.
+- FCM HTTP v1 remains an optional secondary transport for devices with Google Play services. It requires `android-shell/app/google-services.json` at build time and `FCM_SERVICE_ACCOUNT_JSON` (raw or base64 JSON) on the server. No Firebase credentials belong in Git.
+- Devices without Google Play services can use UnifiedPush, but need a compatible distributor app installed and configured. A push distributor is a separate Android app; Nido cannot promise background delivery until a distributor is registered.
 - Durable local data and non-destructive app upgrades.
 - No dependency on a Claude subscription. Provider support must be audited feature by feature.
 - No API credentials embedded in the APK.
 
-The existing application ID `app.rifugio.shell` is retained for upgrade continuity while the product is developed. The FCM SDK is optional at runtime until Firebase is configured, so the app still builds without project-specific credentials. A release APK will require a stable private signing key.
+The existing application ID `app.rifugio.shell` is retained for upgrade continuity while the product is developed. The FCM SDK is optional at runtime until Firebase is configured, so the app still builds without project-specific credentials. UnifiedPush works through a separately installed distributor and does not require Google Play services. A release APK will require a stable private signing key.
