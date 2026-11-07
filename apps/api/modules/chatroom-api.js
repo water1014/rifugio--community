@@ -84,6 +84,7 @@ function providerFor(value, baseUrl, model) {
   const explicit = String(value || 'auto').toLowerCase();
   if (['openai', 'anthropic', 'deepseek', 'compatible', 'opencode-go'].includes(explicit)) return explicit;
   const hint = `${baseUrl || ''} ${model || ''}`.toLowerCase();
+  if (hint.includes('opencode.ai') || hint.includes('opencode-go')) return 'opencode-go';
   if (hint.includes('anthropic.com') || /\bclaude[-_]/.test(hint)) return 'anthropic';
   if (hint.includes('deepseek.com') || /\bdeepseek[-_]/.test(hint)) return 'deepseek';
   if (hint.includes('openai.com') || /\bgpt[-_]/.test(hint)) return 'openai';
@@ -495,6 +496,7 @@ module.exports = {
   normalizeApiKey,
   normalizeCustomHeaders,
   providerRequestHeaders,
+  withOpenCodeSession,
   endpointFor,
   modelsEndpointFor,
   cacheUsage,
