@@ -6,6 +6,7 @@ if (file('google-services.json').exists()) {
 }
 
 def nidoVersionCode = providers.gradleProperty('nidoVersionCode').getOrElse('1').toInteger()
+def nidoKeystorePath = System.getenv('NIDO_KEYSTORE_PATH')
 
 android {
     namespace 'app.rifugio.shell'
@@ -16,6 +17,24 @@ android {
         targetSdk 35
         versionCode = nidoVersionCode
         versionName '0.1.0'
+    }
+
+    // Prefer a durable, privately stored signing key when CI secrets are configured.
+    // Until then, retain Android's normal debug signing for preview builds.
+    if (nidoKeystorePath) {
+        signingConfigs {
+            nido {
+                storeFile file(nidoKeystorePath)
+                storePassword System.getenv('NIDO_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('NIDO_KEY_ALIAS')
+                keyPassword System.getenv('NIDO_KEY_PASSWORD')
+            }
+        }
+        buildTypes {
+            debug {
+                signingConfig signingConfigs.nido
+            }
+        }
     }
 }
 
