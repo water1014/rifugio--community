@@ -1489,60 +1489,6 @@
                     : { sourceLanguage:'zh', targetLanguage:'en', targetName:'English' };
             };
             const diaryTranslationStatusLabel = (name) => name === 'English' ? 'English translation' : `${name}译文`;
-            const extractDiaryClaudeContent = (content) => {
-                if (!content) return '';
-                if (typeof content === 'string') return content;
-                if (Array.isArray(content)) return content.map(part => {
-                    if (typeof part === 'string') return part;
-                    return part?.text || part?.content || '';
-                }).join('');
-                return content.text || content.content || '';
-            };
-            const collectDiaryClaudeText = (obj, holder) => {
-                if (!obj || typeof obj !== 'object') return;
-                const ev = obj.event || obj;
-                const streamError = obj.error?.message || obj.error || (obj.type === 'error' ? obj.message : '');
-                if (streamError) holder.error = String(streamError);
-                if (obj.type === 'assistant' && obj.message?.content && !holder.text) {
-                    holder.text = extractDiaryClaudeContent(obj.message.content);
-                }
-                if (obj.type === 'result' && obj.result && !holder.text) holder.text = String(obj.result);
-                if (ev.type === 'content_block_delta') {
-                    const d = ev.delta || {};
-                    if (d.type === 'text_delta' && d.text) holder.text += d.text;
-                }
-            };
-            const readDiaryClaudeTranslation = async (response) => {
-                const holder = { text:'', error:'' };
-                const reader = response.body?.getReader?.();
-                if (!reader) {
-                    collectDiaryClaudeText(await response.json(), holder);
-                    if (holder.error) throw new Error(holder.error);
-                    return holder.text.trim();
-                }
-                const decoder = new TextDecoder();
-                let buffer = '';
-                while (true) {
-                    const { value, done } = await reader.read();
-                    if (done) break;
-                    buffer += decoder.decode(value, { stream:true });
-                    const lines = buffer.split(/\r?\n/);
-                    buffer = lines.pop() || '';
-                    for (let line of lines) {
-                        line = line.trim();
-                        if (!line || line === 'data: [DONE]' || line.startsWith('event:')) continue;
-                        if (line.startsWith('data:')) line = line.slice(5).trim();
-                        try { collectDiaryClaudeText(JSON.parse(line), holder); } catch(_) {}
-                    }
-                }
-                if (buffer.trim()) {
-                    let line = buffer.trim();
-                    if (line.startsWith('data:')) line = line.slice(5).trim();
-                    try { collectDiaryClaudeText(JSON.parse(line), holder); } catch(_) {}
-                }
-                if (holder.error) throw new Error(holder.error);
-                return holder.text.trim();
-            };
             const translateDiaryWithBrowser = async (text, profile) => {
                 const translatorApi = window.Translator || window.ai?.translator;
                 if (!translatorApi?.create) throw new Error('browser translator unavailable');
