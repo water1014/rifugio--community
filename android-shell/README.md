@@ -1,25 +1,28 @@
-# Rifugio Android shell
+# Nido Android app (development shell)
 
-This is a lightweight Android WebView container for the Rifugio web application.
+The Android application is branded **Nido**. This directory currently contains an early WebView shell only; it is not yet the finished daily-use Android app.
+
+## Current prototype behavior
+
+- Opens a local first-run setup page.
+- Requires a deployed HTTPS Rifugio backend URL.
+- Stores that URL in Android private preferences and loads the remote web app.
+- Does not bundle the backend or provide offline operation.
 
 ## Build
 
-The repository workflow `.github/workflows/android-apk.yml` builds a debug APK on pushes to `feature/android-api-providers` that touch this project, or when manually dispatched.
+The repository workflow `.github/workflows/android-apk.yml` builds a debug APK on pushes to `feature/android-api-providers` that touch the Android project or relevant web/API code, or when manually dispatched.
 
-After a successful run, open the workflow run's **Artifacts** section and download `rifugio-android-debug-apk`. The APK is currently unsigned with a release keystore and is intended for private testing.
+After a successful run, open the workflow run's **Artifacts** section and download `nido-android-debug-apk`. The APK is unsigned with a release keystore and is for development testing only.
 
-## First launch
+## Product requirements still to implement
 
-1. Install the debug APK.
-2. Enter the HTTPS address of a deployed Rifugio server.
-3. Tap Connect.
+- A real Android app experience, not a URL-entry WebView wrapper.
+- Native notification channels and notification permission handling.
+- Push delivery and backend scheduling for proactive messages when the app is backgrounded or terminated.
+- Notification deep links that open the correct conversation.
+- Durable local data and non-destructive app upgrades.
+- No dependency on a Claude subscription. Provider support must be audited feature by feature.
+- No API credentials embedded in the APK.
 
-The shell does not bundle the Rifugio backend. Until a server is deployed and connected, it only displays the setup screen. The configured server URL is stored in the app's private preferences; web data is held in the WebView app storage.
-
-## Security and limitations
-
-- HTTPS only; cleartext HTTP is disabled.
-- No API keys or OpenCode/DeepSeek credentials are bundled in the APK.
-- Configure API credentials in Rifugio's provider settings after connecting. Never hardcode API keys or subscription tokens into this Android shell or commit them to the repository.
-- This initial shell does not yet include offline backend support, push notifications, file export integration, or signed in-app updates.
-- The same Android application ID is retained for future upgrades: `app.rifugio.shell`. A future release build must use a stable private signing key to upgrade this debug package safely.
+The existing application ID `app.rifugio.shell` is retained for upgrade continuity while the product is developed. A release APK will require a stable private signing key.
