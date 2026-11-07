@@ -125,7 +125,7 @@ function createPushRoutes({ readJsonSetting, writeJsonSetting, isAuthed, encrypt
               data,
               android: {
                 priority: 'HIGH',
-                notification: { channel_id: 'nido_messages', click_action: 'FLUTTER_NOTIFICATION_CLICK' },
+                notification: { channel_id: 'nido_messages' },
               },
             },
           }),
