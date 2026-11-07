@@ -2223,6 +2223,12 @@ window.Rifugio.useTalk = function(ctx) {
                         body:JSON.stringify({ subscription, platform:'android-native-unifiedpush', userAgent:'Nido Android' }),
                     });
                     if (response.ok) {
+                        try {
+                            const vapidResponse = await fetch('/api/push/vapid-public-key', { credentials:'include', cache:'no-store' });
+                            const vapidResult = await vapidResponse.json();
+                            if (vapidResult.ok && vapidResult.publicKey) bridge?.refreshUnifiedPush?.(vapidResult.publicKey);
+                        } catch (_) {}
+
                         try { localStorage.setItem('nido-unified-push-endpoint', subscription.endpoint); } catch (_) {}
                         const installationId = String(bridge?.getInstallationId?.() || '').trim();
                         if (installationId) {
@@ -2251,6 +2257,7 @@ window.Rifugio.useTalk = function(ctx) {
                             });
                         }
                         localStorage.removeItem('nido-unified-push-endpoint');
+                        registerNidoNativePushToken();
                     } catch (_) {}
                     return;
                 }
