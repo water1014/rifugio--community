@@ -76,9 +76,10 @@
         }
         applyLockWallpaperFromStorage();
         window.addEventListener('rifugio-wallpaper-updated', applyLockWallpaperFromStorage);
-        // Only a literal file:// preview may skip server login. localhost and
-        // 127.0.0.1 are real Termux/Docker deployments and still need an auth cookie.
-        const isLocalPreview = window.location.protocol === 'file:';
+        // Bundled Android assets use WebViewAssetLoader's synthetic HTTPS origin.
+        // That local-first app has no Nido server login; localhost deployments still do.
+        const isLocalPreview = window.location.protocol === 'file:'
+            || window.location.hostname === 'appassets.androidplatform.net';
         if (isLocalPreview) {
             sessionStorage.setItem(LOCK_KEY, '1');
             lockEl.style.display = 'none';
