@@ -80,3 +80,12 @@ test('changed Nido JavaScript modules parse successfully', () => {
     assert.doesNotThrow(() => new vm.Script(source), name + ' must parse');
   }
 });
+
+test('Android proactive worker receives fresh context after chat saves', () => {
+  assert.match(talk, /let nidoProactiveContextSyncTimer = null/);
+  assert.match(talk, /window\.NidoNative\?\.setProactiveContext/);
+  assert.match(talk, /syncNidoProactiveContext\(current\)/);
+  assert.match(talk, /}, 700\);/);
+  assert.match(native, /setProactiveContext\(String rawContext\)/);
+  assert.match(native, /scheduleNidoProactiveWork\(true\)/);
+});
