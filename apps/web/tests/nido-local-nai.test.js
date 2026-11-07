@@ -165,3 +165,14 @@ test('standalone Nido keeps favorite chat quotes and profile local', () => {
   assert.match(exporter, /已收藏到本机摘句/);
   assert.match(talk, /if \(!savedTalkProfile && !isNidoLocalApp\(\)\)/);
 });
+
+test('standalone Nido moments and AI stickers stay on-device', () => {
+  const moments = read('apps/web/js/apps/18-talk-moments.js');
+  const stickers = read('apps/web/js/apps/18-talk-stickers.js');
+  assert.match(moments, /if \(window\.NidoNative\) \{[\s\S]*?writeTalkMomentsLocal\(\)/);
+  assert.match(moments, /if \(!window\.NidoNative\) \{[\s\S]*?fetch\('\/api\/talk\/moments/);
+  assert.match(stickers, /NIDO_LOCAL_AI_STICKERS_KEY = 'nido-local-ai-stickers-v1'/);
+  assert.match(stickers, /const persistLocalAiStickers = \(\) =>/);
+  assert.match(stickers, /if \(window\.NidoNative\) \{[\s\S]*?persistLocalAiStickers\(\)/);
+  assert.match(stickers, /if \(window\.NidoNative\) \{ persistLocalAiStickers\(\); return; \}/);
+});
