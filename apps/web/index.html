@@ -2811,6 +2811,7 @@
                                     </label>
                                     <div class="talk-notify-actions">
                                         <button type="button" @click="requestTalkNotificationPermission">授权通知</button>
+                                        <button type="button" @click="enableNidoNativePush">开启后台推送</button>
                                         <button type="button" @click="testTalkWebPush">测试</button>
                                     </div>
                                     <p v-if="talkSettings.webPushStatus" class="talk-css-help talk-notify-status">{{ talkSettings.webPushStatus }}</p>
