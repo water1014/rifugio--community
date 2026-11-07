@@ -1,6 +1,8 @@
-# Rifugio Community
+# Nido
 
-A self-hostable home for AI conversations, long-term memory, and MCP tools.
+A private Android-first home for AI conversations, long-term memory, companion tools, and proactive notifications.
+
+Nido is the app identity for this community codebase; original Rifugio/SullyOS attribution and license notices remain intact.
 
 This is a clean-room community edition: application code and empty templates only. Production memories, chat logs, health data, media, credentials, private domains, and private Git history do not belong here.
 
