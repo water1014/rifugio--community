@@ -1,9 +1,14 @@
 const Database = require('./sqlite');
 const { USER_NAME, COMPANION_NAME, PET_PROFILE } = require('./community-config');
+const {
+  providerFor, normalizeApiKey, normalizeCustomHeaders, providerRequestHeaders,
+  withOpenCodeSession, validatePublicBaseUrl, endpointFor,
+} = require('./chatroom-api');
 
 const PET_AI_SETTING_KEY = 'pet_ai';
 const ALLOWED_AI_HOSTS = new Set([
   'api.openai.com',
+  'opencode.ai',
   'api.deepseek.com',
   'open.bigmodel.cn',
   'generativelanguage.googleapis.com',
@@ -56,10 +61,9 @@ function validateBaseUrl(raw) {
   return url.toString().replace(/\/$/, '');
 }
 
-function completionUrl(baseUrl) {
+function completionUrl(baseUrl, provider = 'compatible') {
   const normalized = validateBaseUrl(baseUrl);
-  if (/\/chat\/completions$/i.test(normalized)) return normalized;
-  return normalized + '/chat/completions';
+  return endpointFor(normalized, providerFor(provider, normalized));
 }
 
 function safeModel(value) {
@@ -117,6 +121,7 @@ function mountPetAiRoutes(app, options = {}) {
     provider: cleanText(stored.provider || 'openai', 30),
     base_url: cleanText(stored.base_url || 'https://api.openai.com/v1', 240),
     api_key: stored.api_key_enc ? maskKey(decrypt(stored.api_key_enc)) : '',
+    custom_headers: stored.custom_headers_enc ? decrypt(stored.custom_headers_enc) : '',
     model: cleanText(stored.model || 'gpt-4o-mini', 120),
     daily_diary: stored.daily_diary === true,
     daily_hour: normalizeHour(stored.daily_hour),
@@ -129,11 +134,16 @@ function mountPetAiRoutes(app, options = {}) {
     let apiKey = stored.api_key_enc ? decrypt(stored.api_key_enc) : '';
     const suppliedKey = cleanText(incoming.api_key, 500);
     if (allowIncomingKey && suppliedKey && !suppliedKey.includes('***')) apiKey = suppliedKey;
+    let customHeaders = stored.custom_headers_enc ? decrypt(stored.custom_headers_enc) : (stored.custom_headers || '');
+    if (incoming.custom_headers !== undefined) customHeaders = typeof incoming.custom_headers === 'string'
+      ? incoming.custom_headers : JSON.stringify(incoming.custom_headers || {});
+    normalizeCustomHeaders(customHeaders);
     return {
       provider: cleanText(merged.provider || 'openai', 30),
       base_url: validateBaseUrl(merged.base_url || 'https://api.openai.com/v1'),
       model: safeModel(merged.model || 'gpt-4o-mini'),
-      api_key: apiKey,
+      api_key: normalizeApiKey(apiKey),
+      custom_headers: customHeaders,
       daily_diary: merged.daily_diary === true,
       daily_hour: normalizeHour(merged.daily_hour),
     };
@@ -173,9 +183,15 @@ function mountPetAiRoutes(app, options = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 30000);
     try {
-      const response = await fetch(completionUrl(config.base_url), {
+      const provider = providerFor(config.provider, config.base_url, config.model);
+      if (provider === 'anthropic') throw new Error('养娃 API 目前使用 OpenAI 兼容接口，请选择 OpenCode Go、DeepSeek 或兼容服务');
+      const checked = await validatePublicBaseUrl(config.base_url);
+      const endpoint = endpointFor(checked.toString().replace(/\/$/, ''), provider);
+      const customHeaders = withOpenCodeSession(config.custom_headers || '', endpoint, 'pet-ai', config.model);
+      const headers = providerRequestHeaders(config.api_key, customHeaders, provider);
+      const response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.api_key}` },
+        headers,
         body: JSON.stringify({ model: config.model, messages, temperature, max_tokens: maxTokens, stream: false }),
         signal: controller.signal,
       });
@@ -243,8 +259,15 @@ function mountPetAiRoutes(app, options = {}) {
         daily_hour: normalizeHour(incoming.daily_hour),
       };
       const key = cleanText(incoming.api_key, 500);
-      if (key && !key.includes('***')) stored.api_key_enc = encrypt(key);
+      if (key && !key.includes('***')) stored.api_key_enc = encrypt(normalizeApiKey(key));
       else if (previous.api_key_enc) stored.api_key_enc = previous.api_key_enc;
+      if (incoming.custom_headers !== undefined) {
+        const customHeaders = typeof incoming.custom_headers === 'string'
+          ? incoming.custom_headers : JSON.stringify(incoming.custom_headers || {});
+        stored.custom_headers_enc = encrypt(JSON.stringify(normalizeCustomHeaders(customHeaders)));
+      } else if (previous.custom_headers_enc) {
+        stored.custom_headers_enc = previous.custom_headers_enc;
+      }
       const db = new Database(DB_PATH);
       try {
         db.prepare(`INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
