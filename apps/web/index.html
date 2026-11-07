@@ -226,7 +226,7 @@
         <div class="phone-home-top">
             <div class="phone-home-title">
                 <div class="date">{{ phoneDateLine }}</div>
-                <div class="hello">Rifugio</div>
+                <div class="hello">Nido</div>
             </div>
             <div class="phone-mini-actions">
                 <button v-if="phoneEditMode" class="phone-mini-btn done" @click="finishPhoneEdit">完成</button>
@@ -1031,7 +1031,7 @@
                         <button v-for="m in port.availableModels.slice(0, 24)" :key="port.id + '-' + m" @click="port.model=m; saveChatroomPorts()">{{ m }}</button>
                     </div>
                     <template v-if="port.id !== 'cc'">
-                        <label class="talk-switch"><input type="checkbox" v-model="port.rifugio_experience" @change="saveChatroomPorts"><span>使用全部 Rifugio 恋爱体验工具</span></label>
+                        <label class="talk-switch"><input type="checkbox" v-model="port.rifugio_experience" @change="saveChatroomPorts"><span>使用全部 Nido 恋爱体验工具</span></label>
                         <p class="talk-settings-note">包含记忆、Dream、健康、音乐、生图、表情包和玩具；永不包含终端、VPS 或命令执行。</p>
                     </template>
                     <label>AI 备注 / 角色设定</label>
@@ -3903,7 +3903,7 @@
                             </div>
                             <img v-if="radio.auth.qrUrl" class="radio-login-qr" :src="radio.auth.qrUrl" :alt="radioProviderLabel(radio.auth.provider) + '扫码入口二维码'" @error="radio.auth.message='二维码加载失败，可点击下方直接打开平台'">
                             <button v-if="['expired','failed'].includes(radio.auth.status)" type="button" class="radio-login-direct" @click="startRadioProviderLogin('netease')">重新生成二维码</button>
-                            <small class="radio-login-privacy">请用网易云音乐 App 扫码并在 App 内确认。同一部安卓手机可长按二维码识别；Rifugio 不读取你的网易云密码。</small>
+                            <small class="radio-login-privacy">请用网易云音乐 App 扫码并在 App 内确认。同一部安卓手机可长按二维码识别；Nido 不读取你的网易云密码。</small>
                         </div>
                         <div class="radio-sheet-group">
                             <label><span>▧</span><b>播放器背景图</b><input type="file" accept="image/*" @change="onRadioImageUpload('background', $event)"></label>
