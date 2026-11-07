@@ -3,6 +3,8 @@ package app.rifugio.shell;
 import android.Manifest;
 import android.app.Activity;
 import android.content.SharedPreferences;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
@@ -27,16 +29,28 @@ import androidx.core.content.ContextCompat;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.messaging.FirebaseMessaging;
 
+import static org.unifiedpush.android.connector.ConstantsKt.INSTANCE_DEFAULT;
+import org.unifiedpush.android.connector.UnifiedPush;
+
 import org.json.JSONObject;
 
 public class MainActivity extends Activity {
     private static final String PREFS = "nido_app";
     private static final String KEY_SERVER = "server_url";
     static final String ACTION_PUSH_TOKEN_REFRESHED = "app.rifugio.shell.PUSH_TOKEN_REFRESHED";
+    static final String ACTION_UNIFIED_PUSH_UPDATED = "app.rifugio.shell.UNIFIED_PUSH_UPDATED";
     static final String EXTRA_CONVERSATION_ID = "nido_conversation_id";
     static final String EXTRA_MESSAGE_ID = "nido_message_id";
     private WebView webView;
     private SharedPreferences prefs;
+    private boolean unifiedPushReceiverRegistered = false;
+    private final BroadcastReceiver unifiedPushReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            if (webView != null && webView.getUrl() != null && isConfiguredServerPage(webView.getUrl())) {
+                dispatchUnifiedPushSubscription();
+            }
+        }
+    };
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -46,6 +60,7 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 26) systemUi |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
         getWindow().getDecorView().setSystemUiVisibility(systemUi);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        registerUnifiedPushReceiver();
         createNotificationChannel();
         requestNotificationPermission();
 
@@ -79,6 +94,7 @@ public class MainActivity extends Activity {
                 super.onPageFinished(view, url);
                 if (isConfiguredServerPage(url)) {
                     dispatchNativePushToken();
+                    dispatchUnifiedPushSubscription();
                     dispatchPendingNotification(getIntent());
                 }
             }
@@ -103,6 +119,26 @@ public class MainActivity extends Activity {
         channel.enableVibration(true);
         NotificationManager manager = getSystemService(NotificationManager.class);
         if (manager != null) manager.createNotificationChannel(channel);
+    }
+
+    private void registerUnifiedPushReceiver() {
+        IntentFilter filter = new IntentFilter(ACTION_UNIFIED_PUSH_UPDATED);
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(unifiedPushReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(unifiedPushReceiver, filter);
+        }
+        unifiedPushReceiverRegistered = true;
+    }
+
+    private void dispatchUnifiedPushSubscription() {
+        if (webView == null || webView.getUrl() == null || !webView.getUrl().startsWith("https://")) return;
+        String raw = getSharedPreferences(NidoMessagingService.PREFS, MODE_PRIVATE)
+                .getString("unified_push_subscription", "");
+        if (raw == null || raw.isEmpty()) return;
+        String script = "window.dispatchEvent(new CustomEvent('nido:push-subscription',{detail:"
+                + raw + "}));";
+        webView.evaluateJavascript(script, null);
     }
 
     private void requestNotificationPermission() {
@@ -194,6 +230,36 @@ public class MainActivity extends Activity {
             return NidoMessagingService.installationId(
                     getSharedPreferences(NidoMessagingService.PREFS, MODE_PRIVATE));
         }
+        @JavascriptInterface public String getUnifiedPushSubscription() {
+            return getSharedPreferences(NidoMessagingService.PREFS, MODE_PRIVATE)
+                    .getString("unified_push_subscription", "");
+        }
+        @JavascriptInterface public void enableUnifiedPush(String vapidPublicKey) {
+            runOnUiThread(() -> {
+                String vapid = vapidPublicKey == null ? "" : vapidPublicKey.trim();
+                if (vapid.length() != 87) {
+                    Toast.makeText(MainActivity.this, "通知服务公钥无效，请检查服务器配置", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                try {
+                    UnifiedPush.tryUseCurrentOrDefaultDistributor(MainActivity.this, success -> {
+                        if (success) {
+                            try {
+                                UnifiedPush.register(getApplicationContext(), INSTANCE_DEFAULT, "Nido 消息通知", vapid);
+                                Toast.makeText(MainActivity.this, "已请求连接通知分发器", Toast.LENGTH_SHORT).show();
+                            } catch (Exception error) {
+                                Toast.makeText(MainActivity.this, "通知注册失败：" + error.getMessage(), Toast.LENGTH_LONG).show();
+                            }
+                        } else {
+                            Toast.makeText(MainActivity.this, "没有可用的通知分发器，请先安装并配置 UnifiedPush 分发器", Toast.LENGTH_LONG).show();
+                        }
+                        return kotlin.Unit.INSTANCE;
+                    });
+                } catch (Exception error) {
+                    Toast.makeText(MainActivity.this, "无法启动通知分发器：" + error.getMessage(), Toast.LENGTH_LONG).show();
+                }
+            });
+        }
     }
 
     private final class SetupBridge {
@@ -216,6 +282,14 @@ public class MainActivity extends Activity {
         @JavascriptInterface public String current() {
             return prefs.getString(KEY_SERVER, "");
         }
+    }
+
+    @Override protected void onDestroy() {
+        if (unifiedPushReceiverRegistered) {
+            try { unregisterReceiver(unifiedPushReceiver); } catch (Exception ignored) {}
+            unifiedPushReceiverRegistered = false;
+        }
+        super.onDestroy();
     }
 
     @Override public void onNewIntent(android.content.Intent intent) {
