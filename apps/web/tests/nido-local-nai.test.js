@@ -91,12 +91,14 @@ test('Android proactive worker receives fresh context after chat saves', () => {
 });
 
 test('chat context updates do not keep postponing Android proactive work', () => {
-  const contextMethod = native.match(/@JavascriptInterface public void setProactiveContext\\(String rawContext\\) \\{([\\s\\S]*?)\\n        \\}\\n        @JavascriptInterface public String takePendingProactiveMessages/);
-  assert.ok(contextMethod, 'setProactiveContext bridge method should exist');
-  assert.match(contextMethod[1], /putString\\(NidoProactiveWorker\\.KEY_CONTEXT/);
-  assert.match(contextMethod[1], /putLong\\(NidoProactiveWorker\\.KEY_NEXT_DUE, 0\\)/);
-  assert.doesNotMatch(contextMethod[1], /scheduleNidoProactiveWork/);
-  assert.match(native, /enqueueUniquePeriodicWork/);
+  const start = native.indexOf('@JavascriptInterface public void setProactiveContext(String rawContext)');
+  const end = native.indexOf('@JavascriptInterface public String takePendingProactiveMessages()', start);
+  assert.ok(start >= 0 && end > start, 'setProactiveContext bridge method should exist');
+  const contextMethod = native.slice(start, end);
+  assert.ok(contextMethod.includes('putString(NidoProactiveWorker.KEY_CONTEXT'));
+  assert.ok(contextMethod.includes('putLong(NidoProactiveWorker.KEY_NEXT_DUE, 0)'));
+  assert.ok(!contextMethod.includes('scheduleNidoProactiveWork'));
+  assert.ok(native.includes('enqueueUniquePeriodicWork'));
 });
 
 test('NovelAI locked character presets override model guesses and work on older models', () => {
