@@ -36,7 +36,25 @@ window.Rifugio.useTalkStickers = function(ctx) {
                 source:'ai',
             });
 
+            const NIDO_LOCAL_AI_STICKERS_KEY = 'nido-local-ai-stickers-v1';
+            const persistLocalAiStickers = () => {
+                try {
+                    localStorage.setItem(NIDO_LOCAL_AI_STICKERS_KEY, JSON.stringify(aiStickerLibrary.slice(0,300)));
+                    return true;
+                } catch(error) {
+                    talk.error = '本机 AI 表情保存失败，请检查手机存储空间。';
+                    return false;
+                }
+            };
+            if (window.NidoNative) {
+                try {
+                    const saved = JSON.parse(localStorage.getItem(NIDO_LOCAL_AI_STICKERS_KEY) || '[]');
+                    if (Array.isArray(saved)) aiStickerLibrary.push(...saved.map(normalizeStickerFromServer).filter(s => s.url || s.dataUrl));
+                } catch(_) {}
+            }
+
             const loadTalkStickersFromServer = async () => {
+                if (window.NidoNative) { persistLocalAiStickers(); return; }
                 try {
                     const r = await fetch('/api/talk/ai-stickers', { credentials:'include', cache:'no-store' });
                     if (!r.ok) return;
@@ -48,6 +66,13 @@ window.Rifugio.useTalkStickers = function(ctx) {
 
             const persistTalkStickerToServer = async (s) => {
                 if (!s || (!s.url && !s.dataUrl)) return;
+                if (window.NidoNative) {
+                    const next = normalizeStickerFromServer(s);
+                    const existing = aiStickerLibrary.find(x => x.id === next.id || (x.url || x.dataUrl) === (next.url || next.dataUrl));
+                    if (existing) Object.assign(existing, { ...existing, ...next });
+                    else aiStickerLibrary.unshift(next);
+                    return persistLocalAiStickers();
+                }
                 try {
                     const r = await fetch('/api/talk/ai-stickers', {
                         method:'POST',
@@ -77,6 +102,7 @@ window.Rifugio.useTalkStickers = function(ctx) {
             };
 
             const syncTalkStickersToServer = () => {
+                if (window.NidoNative) { persistLocalAiStickers(); return; }
                 aiStickerLibrary.slice(0, 300).forEach(s => persistTalkStickerToServer(s));
             };
             // —— 表情包分类 + 关键词联想 ——
@@ -357,6 +383,7 @@ window.Rifugio.useTalkStickers = function(ctx) {
             const deleteAiSticker = (id) => {
                 const i = aiStickerLibrary.findIndex(s => s.id === id);
                 if (i >= 0) aiStickerLibrary.splice(i, 1);
+                if (window.NidoNative) { persistLocalAiStickers(); return; }
                 fetch('/api/talk/ai-stickers/' + encodeURIComponent(id), { method:'DELETE', credentials:'include' }).catch(() => {});
             };
 
