@@ -63,7 +63,8 @@ function validateBaseUrl(raw) {
 
 function completionUrl(baseUrl, provider = 'compatible') {
   const normalized = validateBaseUrl(baseUrl);
-  return endpointFor(normalized, providerFor(provider, normalized));
+  const providerId = ['openai', 'anthropic', 'deepseek', 'opencode-go', 'compatible'].includes(provider) ? provider : 'compatible';
+  return endpointFor(normalized, providerFor(providerId, normalized));
 }
 
 function safeModel(value) {
@@ -183,7 +184,9 @@ function mountPetAiRoutes(app, options = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 30000);
     try {
-      const provider = providerFor(config.provider, config.base_url, config.model);
+      const providerId = ['openai', 'anthropic', 'deepseek', 'opencode-go', 'compatible'].includes(config.provider)
+        ? config.provider : 'compatible';
+      const provider = providerFor(providerId, config.base_url, config.model);
       if (provider === 'anthropic') throw new Error('养娃 API 目前使用 OpenAI 兼容接口，请选择 OpenCode Go、DeepSeek 或兼容服务');
       const checked = await validatePublicBaseUrl(config.base_url);
       const endpoint = endpointFor(checked.toString().replace(/\/$/, ''), provider);
@@ -334,4 +337,4 @@ function mountPetAiRoutes(app, options = {}) {
   return { maybeWriteDailyDiary };
 }
 
-module.exports = { mountPetAiRoutes, validateBaseUrl, sanitizeProfile, cleanText, ALLOWED_AI_HOSTS };
+module.exports = { mountPetAiRoutes, validateBaseUrl, completionUrl, sanitizeProfile, cleanText, ALLOWED_AI_HOSTS };
