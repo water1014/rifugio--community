@@ -1266,7 +1266,10 @@ window.Rifugio.useTalkStream = function(ctx) {
                             }
                         }
                         const finalMessage = finalResponse?.choices?.[0]?.message || {};
-                        assistantMsg.content = String(finalMessage.content || assistantMsg.content || (assistantMsg.attachments?.length ? '图片已经生成好了。' : '（空回复）')).trim();
+                        const finalText = String(finalMessage.content || '').trim();
+                        assistantMsg.content = finalText || (assistantMsg.attachments?.length
+                            ? '图片已经生成好了。'
+                            : (String(assistantMsg.content || '').includes('正在调用 NovelAI') ? '刚才的图片请求没有完成，请再试一次。' : String(assistantMsg.content || '（空回复）'))).trim();
                         assistantMsg.thinking = (finalMessage.reasoning_content || finalMessage.reasoning || '').trim();
                         assistantMsg.preview = false;
                         assistantMsg.done = true;
