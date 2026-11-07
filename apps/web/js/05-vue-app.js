@@ -1918,6 +1918,11 @@
                 chatroom.announcementDraft = '';
                 pushRoomMessage('公告', text, 'system');
             };
+            const onChatroomProviderChange = (port) => {
+                if (port.provider === 'opencode-go' && !port.base_url) port.base_url = 'https://opencode.ai/zen/go';
+                if (port.provider === 'deepseek' && !port.base_url) port.base_url = 'https://api.deepseek.com/v1';
+                saveChatroomPorts();
+            };
             const fetchChatroomModels = async (port) => {
                 if (!port.base_url) { port.status = '先填 Base URL'; return; }
                 port.status = '获取中…';
