@@ -159,7 +159,14 @@ public class MainActivity extends Activity {
     private void dispatchPendingNotification(android.content.Intent intent) {
         if (intent == null || webView == null) return;
         String conversationId = intent.getStringExtra(EXTRA_CONVERSATION_ID);
+        if (conversationId == null || conversationId.trim().isEmpty()) {
+            conversationId = intent.getStringExtra("conversationId");
+        }
+        if (conversationId == null || conversationId.trim().isEmpty()) {
+            conversationId = intent.getStringExtra("convoId");
+        }
         String messageId = intent.getStringExtra(EXTRA_MESSAGE_ID);
+        if (messageId == null || messageId.isEmpty()) messageId = intent.getStringExtra("messageId");
         if (conversationId == null || conversationId.trim().isEmpty()) return;
         String script = "window.dispatchEvent(new CustomEvent('nido:open-conversation',{detail:{conversationId:"
                 + JSONObject.quote(conversationId) + ",messageId:"
@@ -167,6 +174,9 @@ public class MainActivity extends Activity {
         webView.evaluateJavascript(script, null);
         intent.removeExtra(EXTRA_CONVERSATION_ID);
         intent.removeExtra(EXTRA_MESSAGE_ID);
+        intent.removeExtra("conversationId");
+        intent.removeExtra("convoId");
+        intent.removeExtra("messageId");
     }
 
     private void showSetup() {
