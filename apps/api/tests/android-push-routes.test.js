@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const { createPushRoutes } = require('../modules/push-routes');
 
 test('Android push tokens require an authenticated owner and are encrypted at rest', () => {
@@ -59,4 +60,70 @@ test('Android push tokens require an authenticated owner and are encrypted at re
   }, res);
   assert.equal(responseBody.removed, 1);
   assert.equal(store.get('android_push_tokens').length, 0);
+});
+
+test('Android push sender uses FCM HTTP v1 with the notified conversation identifiers', async t => {
+  const originalFetch = global.fetch;
+  const originalAccount = process.env.FCM_SERVICE_ACCOUNT_JSON;
+  const originalProject = process.env.FCM_PROJECT_ID;
+  const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+  process.env.FCM_SERVICE_ACCOUNT_JSON = JSON.stringify({
+    client_email: 'nido-push@example.iam.gserviceaccount.com',
+    project_id: 'nido-test-project',
+    private_key: privateKey.export({ type:'pkcs8', format:'pem' }),
+  });
+  process.env.FCM_PROJECT_ID = 'nido-test-project';
+  const store = new Map();
+  const routes = createPushRoutes({
+    readJsonSetting: (key, fallback) => store.has(key) ? store.get(key) : fallback,
+    writeJsonSetting: (key, value) => store.set(key, value),
+    isAuthed: req => req.owner === true,
+    encrypt: value => 'enc:' + value,
+    decrypt: value => value.replace(/^enc:/, ''),
+  });
+  let fcmRequest = null;
+  global.fetch = async (url, options = {}) => {
+    if (String(url).includes('oauth2.googleapis.com/token')) {
+      return new Response(JSON.stringify({ access_token:'test-oauth-token', expires_in:3600 }), { status:200 });
+    }
+    fcmRequest = { url:String(url), options, body:JSON.parse(options.body) };
+    return new Response(JSON.stringify({ name:'projects/nido-test-project/messages/123' }), { status:200 });
+  };
+  t.after(() => {
+    global.fetch = originalFetch;
+    if (originalAccount === undefined) delete process.env.FCM_SERVICE_ACCOUNT_JSON;
+    else process.env.FCM_SERVICE_ACCOUNT_JSON = originalAccount;
+    if (originalProject === undefined) delete process.env.FCM_PROJECT_ID;
+    else process.env.FCM_PROJECT_ID = originalProject;
+  });
+
+  const app = { get() {}, post() {}, delete() {} };
+  routes.mountPushRoutes(app);
+  const saved = routes;
+  const registerApp = {
+    get() {},
+    post(path, handler) { if (path === '/api/push/android/register') this.register = handler; },
+    delete() {},
+  };
+  routes.mountPushRoutes(registerApp);
+  let responseBody;
+  registerApp.register({ owner:true, body:{ token:'fcm-registration-token-0123456789abcdefghijklmnopqrstuvwxyz', installationId:'device-one' } }, {
+    status() { return this; },
+    json(value) { responseBody = value; },
+  });
+  assert.equal(responseBody.ok, true);
+
+  const result = await saved.sendAndroidPushNotification({
+    title:'Nido',
+    body:'我来找你了。',
+    conversationId:'conversation-42',
+    messageId:'message-99',
+  });
+  assert.equal(result.sent, 1);
+  assert.equal(fcmRequest.url, 'https://fcm.googleapis.com/v1/projects/nido-test-project/messages:send');
+  assert.equal(fcmRequest.options.headers.Authorization, 'Bearer test-oauth-token');
+  assert.equal(fcmRequest.body.message.data.conversationId, 'conversation-42');
+  assert.equal(fcmRequest.body.message.data.messageId, 'message-99');
+  assert.equal(fcmRequest.body.message.android.priority, 'HIGH');
+  assert.equal(fcmRequest.body.message.android.notification.channel_id, 'nido_messages');
 });
