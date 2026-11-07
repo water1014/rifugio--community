@@ -59,7 +59,7 @@ if (errors.length) {
   const details = errors.map(error => {
     const line = error.loc?.start?.line ?? '?';
     const column = error.loc?.start?.column ?? '?';
-    return `line ${line}, column ${column}: ${error.message}`;
+    return `line ${line}, column ${column}: ${error.message}; source=${JSON.stringify(error.loc?.source?.slice(0,180) || '')}`;
   });
   throw new Error('Vue template compilation failed:\\n' + details.join('\\n'));
 }
