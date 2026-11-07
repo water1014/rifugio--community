@@ -110,3 +110,6 @@ These features may later be offered as optional add-ons, but the app must remain
 - API contract tests passed; all web tests passed, including local NAI and IndexedDB regression checks; Android debug APK compiled and packaged successfully.
 - Artifact: `nido-android-debug-apk`, 6,477,737 bytes, artifact ID `13571855003`, expires 2026-11-21.
 - This verifies compilation and automated tests only. No live NovelAI key was used, and no physical-device image request has been verified yet.
+
+
+- Added a compatibility fallback for OpenAI-compatible chat models that reject function/tool calling: Nido retries the same turn without the optional NAI tool so enabling image generation does not break ordinary text chat.
