@@ -196,3 +196,16 @@ test('Android packaged assets are served directly and boot diagnostics report re
   assert.match(html, /（没有设置 src\/href）/);
   assert.doesNotMatch(html, /target && target !== window && target\.src\)/);
 });
+
+
+test('OpenCode Go keeps a stable session header per conversation in chat and proactive notifications', () => {
+  assert.match(stream, /const nidoProviderHeaders = \(conversationId='default'\) =>/);
+  assert.match(stream, /nido-opencode-session:' \+ String\(conversationId \|\| 'default'\)/);
+  assert.match(stream, /nidoProviderHeaders\(c\.id\)/);
+  assert.match(stream, /x-opencode-session/);
+  assert.match(stream, /User-Agent.*Nido\\/Android/);
+  const proactive = read('android-shell/app/src/main/java/app/rifugio/shell/NidoProactiveWorker.java');
+  assert.match(proactive, /String conversationId = chat\.optString\("conversationId", "default"\)/);
+  assert.match(proactive, /opencode_session_/);
+  assert.match(proactive, /x-opencode-session/);
+});
