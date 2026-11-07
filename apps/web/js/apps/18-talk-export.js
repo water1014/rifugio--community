@@ -197,7 +197,25 @@ ${talkFavoriteMarker(m, c)}`;
                 try { return `${decodeURIComponent(match[1])}␟${decodeURIComponent(match[2])}`; }
                 catch (_) { return ''; }
             };
+            const NIDO_LOCAL_QUOTES_KEY = 'nido-local-favorite-quotes-v1';
+            const readNidoLocalQuotes = () => {
+                try {
+                    const value = JSON.parse(localStorage.getItem(NIDO_LOCAL_QUOTES_KEY) || '[]');
+                    return Array.isArray(value) ? value : [];
+                } catch(_) { return []; }
+            };
+            const writeNidoLocalQuotes = (items) => {
+                try { localStorage.setItem(NIDO_LOCAL_QUOTES_KEY, JSON.stringify(items)); return true; }
+                catch(_) { talk.error = '本地摘句保存失败，请检查手机存储空间。'; return false; }
+            };
             const loadTalkQuoteFavorites = async () => {
+                if (window.NidoNative) {
+                    Object.keys(talk.favoriteQuoteIds).forEach(key => delete talk.favoriteQuoteIds[key]);
+                    readNidoLocalQuotes().forEach(row => {
+                        if (row?.key && row?.id) talk.favoriteQuoteIds[row.key] = row.id;
+                    });
+                    return;
+                }
                 try {
                     const response = await fetch('/memory-api/aforismi', { cache:'no-store', credentials:'include' });
                     const json = await response.json().catch(() => ({}));
@@ -218,6 +236,29 @@ ${talkFavoriteMarker(m, c)}`;
                 if (!c || !quote || talk.favoriteQuoteBusy[key]) return;
                 talk.favoriteQuoteBusy[key] = true;
                 try {
+                    if (window.NidoNative) {
+                        const rows = readNidoLocalQuotes();
+                        const existingId = talk.favoriteQuoteIds[key];
+                        if (existingId) {
+                            writeNidoLocalQuotes(rows.filter(row => String(row.id) !== String(existingId)));
+                            delete talk.favoriteQuoteIds[key];
+                            talk.sessionNotice = '已从本机摘句中取消收藏。';
+                        } else {
+                            const id = 'local-quote-' + Date.now() + '-' + Math.random().toString(36).slice(2,7);
+                            rows.unshift({
+                                id, key, quote,
+                                author:String(talkProfile.claudeName || 'Companion').trim() || 'Companion',
+                                context:talkQuoteContext(m, c),
+                                createdAt:Date.now(),
+                            });
+                            if (writeNidoLocalQuotes(rows)) {
+                                talk.favoriteQuoteIds[key] = id;
+                                talk.sessionNotice = '已收藏到本机摘句。';
+                            }
+                        }
+                        window.dispatchEvent(new CustomEvent('rifugio-quotes-changed'));
+                        return;
+                    }
                     const existingId = talk.favoriteQuoteIds[key];
                     if (existingId) {
                         const response = await fetch(`/memory-api/aforismi/${existingId}`, { method:'DELETE', credentials:'include' });
