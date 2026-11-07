@@ -111,7 +111,7 @@ window.Rifugio.useCrabRoom = function(ctx) {
             chatOpen:false, chatBusy:false, chatInput:'', chatKeyboardOpen:false, chatViewportStyle:{ '--crab-chat-height':'100dvh', '--crab-chat-top':'0px' },
             chatMessages:Array.isArray(savedPetChat.messages) ? savedPetChat.messages.slice(-40) : [],
             ai:{
-                provider:'openai', base_url:'https://api.openai.com/v1', api_key:'', model:'gpt-4o-mini', custom_headers:'',
+                provider:'opencode-go', base_url:'https://opencode.ai/zen/go', api_key:'', model:'', custom_headers:'',
                 daily_diary:false, daily_hour:22, loading:false, saving:false, testing:false, status:'',
                 providers:[
                     { id:'opencode-go', label:'OpenCode Go', base_url:'https://opencode.ai/zen/go', model:'' },
