@@ -89,3 +89,12 @@ test('Android proactive worker receives fresh context after chat saves', () => {
   assert.match(native, /setProactiveContext\(String rawContext\)/);
   assert.match(native, /scheduleNidoProactiveWork\(true\)/);
 });
+
+test('chat context updates do not keep postponing Android proactive work', () => {
+  const contextMethod = native.match(/@JavascriptInterface public void setProactiveContext\\(String rawContext\\) \\{([\\s\\S]*?)\\n        \\}\\n        @JavascriptInterface public String takePendingProactiveMessages/);
+  assert.ok(contextMethod, 'setProactiveContext bridge method should exist');
+  assert.match(contextMethod[1], /putString\\(NidoProactiveWorker\\.KEY_CONTEXT/);
+  assert.match(contextMethod[1], /putLong\\(NidoProactiveWorker\\.KEY_NEXT_DUE, 0\\)/);
+  assert.doesNotMatch(contextMethod[1], /scheduleNidoProactiveWork/);
+  assert.match(native, /enqueueUniquePeriodicWork/);
+});
