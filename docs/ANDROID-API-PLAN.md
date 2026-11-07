@@ -54,3 +54,22 @@ The Android/Rifugio setup must support all three user-requested routes:
 - Keep the existing license files and NOTICE intact.
 - Do not overwrite `main` or `gh-pages`.
 - Do not claim an API provider works until both model discovery (where supported) and a real chat request have been tested.
+
+
+## Work completed on feature/android-api-providers
+
+- Added an Android WebView shell project under `android-shell/` with an HTTPS-only first-run server setup screen.
+- Added a GitHub Actions workflow that runs the API contract tests and builds a debug APK artifact.
+- Added custom request-header support to the shared chatroom/talk provider proxy, including safe header validation, reserved hop-by-hop header blocking, size limits, and case-insensitive overrides.
+- Added a custom-header field to the chatroom provider settings UI and included it in model discovery and chat requests.
+- Added an OpenCode Go provider preset. The legacy `https://opencode.ai/zen/go` base URL is normalized to the Go Chat Completions and model-list endpoints. The current documented `https://opencode.ai/inference/go/openai/v1` base URL is also supported.
+- Added automatic stable `x-opencode-session` and Rifugio `User-Agent` headers for OpenCode Go chat requests. The current namespace is derived from the configured chatroom/talk port and model; a future per-conversation identifier should replace it when the app exposes a stable conversation ID.
+- Added unit and proxy contract tests for custom headers and OpenCode Go routing.
+
+## Not yet complete
+
+- The Android shell is not a bundled/offline Rifugio app. It requires an HTTPS deployment of the web/API server.
+- The APK has not yet passed a successful build; the first CI attempt failed because the Android SDK setup action tried to install the retired `tools` package. The workflow was updated to install explicit SDK packages and is being rechecked.
+- Custom headers and the OpenCode Go preset are currently wired into the chatroom/talk shared provider proxy. Memory import, pet AI, image, voice, and other feature-specific API routes still need separate review and alignment.
+- DeepSeek official and generic OpenAI-compatible chatroom calls use the existing shared proxy, but a full end-to-end live test with user credentials has not been run.
+- The app has not been deployed to a server or installed on a physical Android device.
