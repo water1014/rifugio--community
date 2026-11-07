@@ -1168,6 +1168,12 @@ window.Rifugio.useTalkStream = function(ctx) {
                             && String(talkSettings.naiApiKey || '').trim()
                             && typeof generateNaiImageForChat === 'function'
                         );
+                        if (canUseLocalNaiTool) {
+                            messages.unshift({
+                                role:'system',
+                                content:'你可以使用本机 NovelAI 生图工具 nido_generate_image。用户明确要求看图、画图或生成插画时，直接调用工具完成，不要只用文字假装已经出图。根据角色设定提取外貌提示词；多人请分别填写 characters；scene 只写场景、动作、镜头和构图。生成的图片会自动附加到当前聊天。'
+                            });
+                        }
                         const providerPayload = {
                             model:talkSettings.apiModel,
                             messages,
