@@ -200,17 +200,18 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
                 imageStudio.keyHint = key ? key.slice(0, 4) + '…' + key.slice(-2) : '';
                 return body;
             };
-            const buildNaiLocalRequest = (scene) => {
+            const buildNaiLocalRequest = (scene, options={}) => {
                 const config = buildImageConfigPayload({ includeKey:false });
-                const preset = imageStudio.presets.find(p => p && p.id === imageStudio.activePresetId) || null;
+                const preset = imageStudio.presets.find(p => p && p.id === (options.presetId || imageStudio.activePresetId)) || null;
                 const presetChars = preset?.character ? String(preset.character).split(/\n+/).map(v => v.trim()).filter(Boolean) : [];
-                const characters = preset?.lockCharacters && presetChars.length
+                const requestedCharacters = Array.isArray(options.characters) ? options.characters.map(value => String(value || '').trim()).filter(Boolean).slice(0, 6) : null;
+                const characters = requestedCharacters || (preset?.lockCharacters && presetChars.length
                     ? presetChars
-                    : (presetChars.length > 1 ? presetChars : []);
+                    : (presetChars.length > 1 ? presetChars : []));
                 const singleCharacter = !characters.length && presetChars.length === 1 ? presetChars[0] : '';
                 const positive = [preset?.prompt, singleCharacter, scene].map(v => String(v || '').trim()).filter(Boolean).join(', ');
                 if (!positive && !characters.length) throw new Error('没有正向提示词，请填写场景或选择画师预设组');
-                const negative = String(preset?.negative || talkSettings.naiNegativePrompt || '').trim();
+                const negative = String(options.negative || preset?.negative || talkSettings.naiNegativePrompt || '').trim();
                 const seed = normalizeNaiSeed();
                 const finalSeed = seed && seed > 0 ? seed : Math.floor(Math.random() * 4294967295) + 1;
                 const parameters = { ...(config.parameters || {}) };
@@ -310,6 +311,26 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
                 walk(payload);
                 return out;
             };
+            const generateNaiImageForChat = async (options={}) => {
+                if (!imageStudio.localMode) throw new Error('当前不是 Nido 本地 Android 模式');
+                if (normalizeImageProvider() !== 'novelai') throw new Error('Nido 本地生图仅支持 NovelAI');
+                const key = String(talkSettings.naiApiKey || '').trim();
+                if (!key) throw new Error('尚未配置 NovelAI API Key，请先到生图设置填写并保存');
+                if (!window.NidoNativeHttp?.postNaiImage) throw new Error('当前 APK 缺少 NAI 原生生图模块，请更新 APK');
+                const scene = String(options.scene || options.prompt || '').trim();
+                const payload = buildNaiLocalRequest(scene, options);
+                const base = normalizeImageBaseUrl(talkSettings.imageBaseUrl, 'novelai') || 'https://image.novelai.net';
+                const endpoint = base.replace(/\/+$/, '') + '/ai/generate-image';
+                const response = await window.NidoNativeHttp.postNaiImage(endpoint, {
+                    Authorization:'Bearer ' + key,
+                    Accept:'application/x-zip-compressed, application/zip, image/png, image/webp, application/json',
+                }, payload);
+                if (!response.ok) throw new Error(response.nativeError || 'NovelAI 请求失败（HTTP ' + response.status + '）');
+                const images = Array.isArray(response.imageDataUrls) ? response.imageDataUrls : (response.imageDataUrl ? [response.imageDataUrl] : []);
+                if (!images.length) throw new Error(response.nativeError || 'NovelAI 没有返回图片');
+                await saveLatestNaiImages(images, payload.input);
+                return { images, prompt:payload.input, seed:payload.parameters.seed, model:payload.model };
+            };
             const runImageStudioTestGenerate = async () => {
                 if (imageStudio.testGenerating) return;
                 const actionPrompt = String(imageStudio.testPrompt || '').trim();
@@ -325,26 +346,9 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
                 imageStudio.testImages = [];
                 try {
                     if (imageStudio.localMode) {
-                        if (normalizeImageProvider() !== 'novelai') throw new Error('Nido 本地版目前只接入 NovelAI 生图');
-                        const key = String(talkSettings.naiApiKey || '').trim();
-                        if (!key) throw new Error('请先填写 NovelAI API Key');
-                        if (!window.NidoNativeHttp?.postNaiImage) throw new Error('当前 APK 缺少 NAI 原生生图模块，请更新 APK');
-                        const base = normalizeImageBaseUrl(talkSettings.imageBaseUrl, 'novelai') || 'https://image.novelai.net';
-                        const endpoint = base.replace(/\/+$/, '') + '/ai/generate-image';
-                        const payload = buildNaiLocalRequest(actionPrompt);
-                        const r = await window.NidoNativeHttp.postNaiImage(endpoint, {
-                            Authorization:'Bearer ' + key,
-                            Accept:'application/x-zip-compressed, application/zip, image/png, image/webp, application/json',
-                        }, payload);
-                        if (!r.ok) throw new Error(r.nativeError || 'NovelAI 请求失败（HTTP ' + r.status + '）');
-                        const images = Array.isArray(r.imageDataUrls) ? r.imageDataUrls : (r.imageDataUrl ? [r.imageDataUrl] : []);
-                        if (!images.length) throw new Error(r.nativeError || 'NovelAI 没有返回图片');
-                        imageStudio.testImages = images;
-                        imageStudio.testGenerateStatus = 'NAI 生图成功 ✓ 共 ' + images.length + ' 张，已保存在本机';
-                        saveLatestNaiImages(images, payload.input).catch(error => {
-                            console.warn('[Nido] NAI 图片保存失败：', error?.message || error);
-                            imageStudio.testGenerateStatus = 'NAI 已出图，但本地保存失败：' + (error?.message || error);
-                        });
+                        const result = await generateNaiImageForChat({ scene:actionPrompt });
+                        imageStudio.testImages = result.images;
+                        imageStudio.testGenerateStatus = 'NAI 生图成功 ✓ 共 ' + result.images.length + ' 张，已保存在本机';
                         return;
                     }
                     const body = buildImageConfigPayload({ includeKey:true });
@@ -587,6 +591,6 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
                 try { await fetch('/api/image/config', { method:'PUT', headers:{ 'Content-Type':'application/json' }, credentials:'include', body:JSON.stringify({ activePresetId:id }) }); } catch(_) {}
             };
 
-            return { NAI_IMAGE_MODELS, imageStudio, NAI_SAMPLER_ALIASES, normalizeImageProvider, normalizeImageBaseUrl, parseNaiResolution, normalizeNaiSampler, normalizeNaiSeed, isNovelAIModelV4, naiSupportsSmea, defaultVarietySigma, buildImageConfigPayload, getActiveImagePreset, activePresetName, joinPromptParts, composePresetTestPrompt, composePresetTestNegative, revokeImageStudioObjectUrls, collectImageResultUrls, runImageStudioTestGenerate, applyImageConfigFromServer, parseImageJson, loadImageConfig, saveImageServer, imageCfgSaveTimer, autoSaveImageConfig, testImageConnection, addImagePreset, updateImagePreset, presetSaveTimers, updateImagePresetDebounced, deleteImagePreset, setActivePreset };
+            return { NAI_IMAGE_MODELS, imageStudio, NAI_SAMPLER_ALIASES, normalizeImageProvider, normalizeImageBaseUrl, parseNaiResolution, normalizeNaiSampler, normalizeNaiSeed, isNovelAIModelV4, naiSupportsSmea, defaultVarietySigma, buildImageConfigPayload, getActiveImagePreset, activePresetName, joinPromptParts, composePresetTestPrompt, composePresetTestNegative, revokeImageStudioObjectUrls, collectImageResultUrls, runImageStudioTestGenerate, generateNaiImageForChat, buildNaiLocalRequest, applyImageConfigFromServer, parseImageJson, loadImageConfig, saveImageServer, imageCfgSaveTimer, autoSaveImageConfig, testImageConnection, addImagePreset, updateImagePreset, presetSaveTimers, updateImagePresetDebounced, deleteImagePreset, setActivePreset };
     }
 };
