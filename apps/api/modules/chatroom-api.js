@@ -94,6 +94,38 @@ function normalizeApiKey(value) {
   return String(value || '').trim().replace(/^Bearer\s+/i, '').trim();
 }
 
+function normalizeCustomHeaders(value) {
+  if (value == null || value === '') return {};
+  let input = value;
+  if (typeof input === 'string') {
+    try { input = JSON.parse(input); } catch (_) { throw new Error('自定义请求头必须是有效 JSON 对象'); }
+  }
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('自定义请求头必须是 JSON 对象');
+  }
+  const entries = Object.entries(input);
+  if (entries.length > 20) throw new Error('自定义请求头最多允许 20 项');
+  const blocked = new Set(['host', 'content-length', 'connection', 'transfer-encoding', 'upgrade',
+    'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'cookie', 'set-cookie']);
+  const headers = {};
+  for (const [rawName, rawValue] of entries) {
+    const name = String(rawName).trim();
+    const headerValue = String(rawValue == null ? '' : rawValue).trim();
+    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name)) throw new Error('自定义请求头名称无效');
+    if (blocked.has(name.toLowerCase())) throw new Error('不允许覆盖安全请求头：' + name);
+    if (!headerValue || headerValue.length > 4096 || /[\\r\\n]/.test(headerValue)) throw new Error('自定义请求头值无效：' + name);
+    headers[name] = headerValue;
+  }
+  return headers;
+}
+
+function providerRequestHeaders(apiKey, customHeaders = {}, provider = 'compatible') {
+  const defaults = provider === 'anthropic'
+    ? { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }
+    : { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` };
+  return { ...defaults, ...normalizeCustomHeaders(customHeaders) };
+}
+
 function endpointFor(baseUrl, provider) {
   const clean = String(baseUrl).replace(/\/+$/, '');
   if (provider === 'anthropic') {
@@ -178,7 +210,7 @@ function normalizeMessages(messages, toolsEnabled) {
   return clean;
 }
 
-async function runOpenAiCompatible({ provider, endpoint, apiKey, model, messages, temperature, tools, namespace, requestId, routeName }) {
+async function runOpenAiCompatible({ provider, endpoint, apiKey, customHeaders, model, messages, temperature, tools, namespace, requestId, routeName }) {
   const working = messages.map(item => ({ ...item }));
   const toolDefs = toOpenAiTools(tools);
   const used = [];
@@ -191,7 +223,7 @@ async function runOpenAiCompatible({ provider, endpoint, apiKey, model, messages
     }
     last = await fetchJson(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      headers: providerRequestHeaders(apiKey, customHeaders, provider),
       body: JSON.stringify(body),
     });
     const choice = last.choices && last.choices[0];
@@ -260,7 +292,7 @@ function toAnthropicMessages(messages) {
   return { system, turns };
 }
 
-async function runAnthropic({ provider, endpoint, apiKey, model, messages, temperature, tools, requestId, routeName }) {
+async function runAnthropic({ provider, endpoint, apiKey, customHeaders, model, messages, temperature, tools, requestId, routeName }) {
   const converted = toAnthropicMessages(messages);
   const working = converted.turns.map(item => ({ ...item }));
   const toolDefs = toAnthropicTools(tools);
@@ -384,7 +416,7 @@ function mountProviderApiRoutes(app, options = {}) {
       const tools = capabilities.length ? await getAllowedTools(capabilities) : [];
       const messages = normalizeMessages(body.messages, tools.length > 0);
       const input = {
-        provider, endpoint, apiKey, model, messages, tools,
+        provider, endpoint, apiKey, customHeaders, model, messages, tools,
         temperature: Number.isFinite(Number(body.temperature)) ? Number(body.temperature) : 0.85,
         namespace: String(body.cache_namespace || defaultNamespace).slice(0, 80),
         requestId, routeName,
