@@ -43,6 +43,9 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import java.security.KeyStore;
+import java.io.ByteArrayInputStream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 import androidx.core.content.ContextCompat;
 import androidx.webkit.WebViewAssetLoader;
@@ -301,6 +304,133 @@ public class MainActivity extends Activity {
         return output.toString("UTF-8");
     }
 
+    private byte[] readBytesLimited(InputStream input, int limit) throws Exception {
+        if (input == null) return new byte[0];
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int total = 0, count;
+        while ((count = input.read(buffer)) != -1) {
+            total += count;
+            if (total > limit) throw new IllegalStateException("图片响应超过 30 MB");
+            output.write(buffer, 0, count);
+        }
+        return output.toByteArray();
+    }
+
+    private byte[] extractFirstNaiImage(byte[] response) throws Exception {
+        if (response.length >= 2 && response[0] == 0x50 && response[1] == 0x4b) {
+            try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(response))) {
+                ZipEntry entry;
+                while ((entry = zip.getNextEntry()) != null) {
+                    if (entry.isDirectory()) continue;
+                    String name = entry.getName().toLowerCase(java.util.Locale.ROOT);
+                    if (!(name.endsWith(".png") || name.endsWith(".webp")
+                            || name.endsWith(".jpg") || name.endsWith(".jpeg"))) continue;
+                    byte[] image = readBytesLimited(zip, 30 * 1024 * 1024);
+                    if (image.length > 0) return image;
+                }
+            }
+            throw new IllegalStateException("NAI 返回 ZIP，但里面没有可识别的图片");
+        }
+        if (response.length >= 8 && (response[0] & 255) == 0x89
+                && response[1] == 0x50 && response[2] == 0x4e && response[3] == 0x47) return response;
+        if (response.length >= 12 && response[0] == 'R' && response[1] == 'I'
+                && response[2] == 'F' && response[3] == 'F'
+                && response[8] == 'W' && response[9] == 'E'
+                && response[10] == 'B' && response[11] == 'P') return response;
+        if (response.length >= 3 && (response[0] & 255) == 0xff
+                && (response[1] & 255) == 0xd8 && (response[2] & 255) == 0xff) return response;
+        String raw = new String(response, StandardCharsets.UTF_8);
+        try {
+            JSONObject json = new JSONObject(raw);
+            String encoded = json.optString("data", json.optString("b64_json", ""));
+            if (encoded.startsWith("data:image/")) encoded = encoded.substring(encoded.indexOf(",") + 1);
+            if (!encoded.isEmpty()) return Base64.decode(encoded, Base64.DEFAULT);
+            String message = json.optString("message", json.optString("error", ""));
+            if (!message.isEmpty()) throw new IllegalStateException(message);
+        } catch (org.json.JSONException ignored) {}
+        throw new IllegalStateException("NAI 响应不是图片或 ZIP，请检查接口地址和返回格式");
+    }
+
+    private String naiImageMime(byte[] image) {
+        if (image.length >= 12 && image[0] == 'R' && image[1] == 'I'
+                && image[2] == 'F' && image[3] == 'F'
+                && image[8] == 'W' && image[9] == 'E'
+                && image[10] == 'B' && image[11] == 'P') return "image/webp";
+        if (image.length >= 3 && (image[0] & 255) == 0xff
+                && (image[1] & 255) == 0xd8 && (image[2] & 255) == 0xff) return "image/jpeg";
+        return "image/png";
+    }
+
+    private void enqueueNativeNaiImage(String requestId, String rawUrl, String rawHeaders, String body) {
+        final String id = requestId == null ? "" : requestId.substring(0, Math.min(80, requestId.length()));
+        httpExecutor.execute(() -> {
+            JSONObject result = new JSONObject();
+            HttpURLConnection connection = null;
+            try {
+                URL url = new URL(rawUrl);
+                if (!"https".equalsIgnoreCase(url.getProtocol()) || url.getUserInfo() != null
+                        || url.getHost() == null || url.getHost().isEmpty()) {
+                    throw new IllegalArgumentException("只允许 HTTPS NAI 接口地址");
+                }
+                for (InetAddress address : InetAddress.getAllByName(url.getHost())) {
+                    if (isUnsafeAddress(address)) throw new IllegalArgumentException("NAI 地址指向本地或私有网络，已拒绝");
+                }
+                byte[] requestBody = (body == null ? "{}" : body).getBytes(StandardCharsets.UTF_8);
+                if (requestBody.length > 12 * 1024 * 1024) throw new IllegalArgumentException("生图参数超过 12 MB");
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("POST");
+                connection.setInstanceFollowRedirects(false);
+                connection.setConnectTimeout(20000);
+                connection.setReadTimeout(180000);
+                connection.setDoOutput(true);
+                connection.setRequestProperty("Content-Type", "application/json");
+                connection.setRequestProperty("Accept", "application/x-zip-compressed, application/zip, image/png, image/webp, application/json");
+                JSONObject headers = new JSONObject(rawHeaders == null ? "{}" : rawHeaders);
+                Iterator<String> names = headers.keys();
+                while (names.hasNext()) {
+                    String name = names.next();
+                    String value = headers.optString(name, "");
+                    String lower = name.toLowerCase(java.util.Locale.ROOT);
+                    if (!name.matches("[!#$%&'*+.^_`|~0-9A-Za-z-]{1,80}")
+                            || value.length() > 8192 || value.contains("\r") || value.contains("\n")
+                            || lower.equals("host") || lower.equals("content-length")
+                            || lower.equals("connection") || lower.equals("cookie")
+                            || lower.equals("set-cookie") || lower.startsWith("proxy-")
+                            || lower.equals("transfer-encoding")) continue;
+                    connection.setRequestProperty(name, value);
+                }
+                try (OutputStream output = connection.getOutputStream()) { output.write(requestBody); }
+                int status = connection.getResponseCode();
+                result.put("status", status);
+                if (status >= 300 && status < 400) {
+                    result.put("error", "NAI 重定向已拒绝，请检查 Base URL");
+                } else if (status < 200 || status >= 300) {
+                    byte[] error = readBytesLimited(connection.getErrorStream(), 1024 * 1024);
+                    String detail = new String(error, StandardCharsets.UTF_8);
+                    try {
+                        JSONObject json = new JSONObject(detail);
+                        detail = json.optString("message", json.optString("error", detail));
+                    } catch (Exception ignored) {}
+                    result.put("error", "NAI 返回 HTTP " + status + (detail.isEmpty() ? "" : "：" + detail.substring(0, Math.min(500, detail.length()))));
+                } else {
+                    byte[] response = readBytesLimited(connection.getInputStream(), 30 * 1024 * 1024);
+                    byte[] image = extractFirstNaiImage(response);
+                    result.put("imageDataUrl", "data:" + naiImageMime(image) + ";base64,"
+                            + Base64.encodeToString(image, Base64.NO_WRAP));
+                }
+            } catch (Exception error) {
+                try {
+                    result.put("status", 0);
+                    result.put("error", error.getMessage() == null ? "NAI 网络请求失败" : error.getMessage());
+                } catch (Exception ignored) {}
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+            deliverNativeHttpResult(id, result);
+        });
+    }
+
     private void deliverNativeHttpResult(String requestId, JSONObject result) {
         if (isFinishing() || isDestroyed() || webView == null) return;
         final String payload = result.toString();
@@ -444,6 +574,9 @@ public class MainActivity extends Activity {
         }
         @JavascriptInterface public void getJson(String requestId, String rawUrl, String rawHeaders) {
             enqueueNativeRequest(requestId, "GET", rawUrl, rawHeaders, "");
+        }
+        @JavascriptInterface public void postNaiImage(String requestId, String rawUrl, String rawHeaders, String body) {
+            enqueueNativeNaiImage(requestId, rawUrl, rawHeaders, body);
         }
         @JavascriptInterface public String getPushToken() {
             return getSharedPreferences(NidoMessagingService.PREFS, MODE_PRIVATE)
