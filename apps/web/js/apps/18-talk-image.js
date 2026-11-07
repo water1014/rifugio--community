@@ -140,6 +140,51 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
                 if (opts.includeKey && key) body.apiKey = key;
                 return body;
             };
+            const NIDO_NAI_GALLERY_DB = 'nido-nai-gallery-v1';
+            let nidoNaiGalleryDbPromise = null;
+            const openNidoNaiGalleryDb = () => {
+                if (!window.indexedDB) return Promise.reject(new Error('当前 WebView 不支持图片本地保存'));
+                if (nidoNaiGalleryDbPromise) return nidoNaiGalleryDbPromise;
+                nidoNaiGalleryDbPromise = new Promise((resolve, reject) => {
+                    const request = indexedDB.open(NIDO_NAI_GALLERY_DB, 1);
+                    request.onupgradeneeded = () => {
+                        const db = request.result;
+                        if (!db.objectStoreNames.contains('images')) db.createObjectStore('images');
+                    };
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error || new Error('图片本地库打开失败'));
+                });
+                return nidoNaiGalleryDbPromise;
+            };
+            const saveLatestNaiImages = async (images, prompt) => {
+                if (!imageStudio.localMode || !Array.isArray(images) || !images.length) return;
+                const db = await openNidoNaiGalleryDb();
+                const snapshot = { images:images.slice(0,4), prompt:String(prompt || ''), createdAt:Date.now() };
+                await new Promise((resolve, reject) => {
+                    const tx = db.transaction('images', 'readwrite');
+                    tx.objectStore('images').put(snapshot, 'latest');
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error || new Error('图片保存失败'));
+                    tx.onabort = () => reject(tx.error || new Error('图片保存已取消'));
+                });
+            };
+            const restoreLatestNaiImages = async () => {
+                if (!imageStudio.localMode) return;
+                try {
+                    const db = await openNidoNaiGalleryDb();
+                    const snapshot = await new Promise((resolve, reject) => {
+                        const request = db.transaction('images', 'readonly').objectStore('images').get('latest');
+                        request.onsuccess = () => resolve(request.result || null);
+                        request.onerror = () => reject(request.error || new Error('图片读取失败'));
+                    });
+                    if (snapshot && Array.isArray(snapshot.images)) {
+                        imageStudio.testImages = snapshot.images.filter(value => String(value).startsWith('data:image/'));
+                        if (imageStudio.testImages.length) imageStudio.testGenerateStatus = '已从本机恢复最近一次 NAI 生图';
+                    }
+                } catch(error) {
+                    console.warn('[Nido] NAI 图片恢复失败：', error?.message || error);
+                }
+            };
             const NIDO_IMAGE_CONFIG_LS = 'nido-local-image-config-v1';
             const saveNidoImageConfig = () => {
                 const body = buildImageConfigPayload({ includeKey:false });
@@ -295,7 +340,11 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
                         const images = Array.isArray(r.imageDataUrls) ? r.imageDataUrls : (r.imageDataUrl ? [r.imageDataUrl] : []);
                         if (!images.length) throw new Error(r.nativeError || 'NovelAI 没有返回图片');
                         imageStudio.testImages = images;
-                        imageStudio.testGenerateStatus = 'NAI 生图成功 ✓ 共 ' + images.length + ' 张';
+                        imageStudio.testGenerateStatus = 'NAI 生图成功 ✓ 共 ' + images.length + ' 张，已保存在本机';
+                        saveLatestNaiImages(images, payload.input).catch(error => {
+                            console.warn('[Nido] NAI 图片保存失败：', error?.message || error);
+                            imageStudio.testGenerateStatus = 'NAI 已出图，但本地保存失败：' + (error?.message || error);
+                        });
                         return;
                     }
                     const body = buildImageConfigPayload({ includeKey:true });
@@ -402,6 +451,7 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
                         imageStudio.keyHint = imageStudio.hasKey
                             ? String(talkSettings.naiApiKey).slice(0, 4) + '…' + String(talkSettings.naiApiKey).slice(-2)
                             : '';
+                        await restoreLatestNaiImages();
                     } catch(error) {
                         console.warn('[Nido] 本地 NAI 设置读取失败：', error?.message || error);
                     }
