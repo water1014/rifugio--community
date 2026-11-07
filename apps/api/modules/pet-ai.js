@@ -132,10 +132,10 @@ function mountPetAiRoutes(app, options = {}) {
   };
 
   const publicConfig = stored => {
-    const provider = cleanText(stored.provider || 'openai', 30);
+    const provider = cleanText(stored.provider || 'opencode-go', 30);
     return {
     provider,
-    base_url: cleanText(stored.base_url || 'https://api.openai.com/v1', 240),
+    base_url: cleanText(stored.base_url || (provider === 'opencode-go' ? 'https://opencode.ai/zen/go' : 'https://api.openai.com/v1'), 240),
     api_key: stored.api_key_enc ? maskKey(decrypt(stored.api_key_enc)) : '',
     custom_headers: stored.custom_headers_enc ? decrypt(stored.custom_headers_enc) : '',
     model: cleanText(stored.model || (provider === 'openai' ? 'gpt-4o-mini' : ''), 120),
@@ -155,11 +155,12 @@ function mountPetAiRoutes(app, options = {}) {
     if (incoming.custom_headers !== undefined) customHeaders = typeof incoming.custom_headers === 'string'
       ? incoming.custom_headers : JSON.stringify(incoming.custom_headers || {});
     normalizeCustomHeaders(customHeaders);
-    const provider = cleanText(merged.provider || 'openai', 30);
+    const provider = cleanText(merged.provider || 'opencode-go', 30);
     const defaultModel = provider === 'openai' ? 'gpt-4o-mini' : '';
+    const defaultBaseUrl = provider === 'opencode-go' ? 'https://opencode.ai/zen/go' : 'https://api.openai.com/v1';
     return {
       provider,
-      base_url: validateBaseUrl(merged.base_url || 'https://api.openai.com/v1'),
+      base_url: validateBaseUrl(merged.base_url || defaultBaseUrl),
       model: safeModel(merged.model || defaultModel),
       api_key: normalizeApiKey(apiKey),
       custom_headers: customHeaders,
@@ -268,12 +269,13 @@ function mountPetAiRoutes(app, options = {}) {
     try {
       const incoming = req.body && typeof req.body === 'object' ? req.body : {};
       const previous = readStoredConfig();
-      const provider = cleanText(incoming.provider || previous.provider || 'openai', 30);
+      const provider = cleanText(incoming.provider || previous.provider || 'opencode-go', 30);
       const defaultModel = provider === 'openai' ? 'gpt-4o-mini' : '';
+      const defaultBaseUrl = provider === 'opencode-go' ? 'https://opencode.ai/zen/go' : 'https://api.openai.com/v1';
       const modelValue = incoming.model !== undefined ? incoming.model : (previous.model || defaultModel);
       const stored = {
         provider,
-        base_url: validateBaseUrl(incoming.base_url || previous.base_url || 'https://api.openai.com/v1'),
+        base_url: validateBaseUrl(incoming.base_url || previous.base_url || defaultBaseUrl),
         model: safeModel(modelValue),
         daily_diary: incoming.daily_diary === true,
         daily_hour: normalizeHour(incoming.daily_hour),
