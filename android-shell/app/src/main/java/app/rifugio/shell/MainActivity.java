@@ -123,14 +123,38 @@ public class MainActivity extends Activity {
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                WebResourceResponse localImage = interceptNidoImage(request.getUrl());
-                return localImage != null ? localImage : assetLoader.shouldInterceptRequest(request.getUrl());
+                Uri uri = request.getUrl();
+                WebResourceResponse localImage = interceptNidoImage(uri);
+                if (localImage != null) return localImage;
+                WebResourceResponse packaged = assetLoader.shouldInterceptRequest(uri);
+                return packaged != null ? packaged : interceptPackagedAsset(uri);
             }
 
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
                 Uri uri = Uri.parse(url);
                 WebResourceResponse localImage = interceptNidoImage(uri);
-                return localImage != null ? localImage : assetLoader.shouldInterceptRequest(uri);
+                if (localImage != null) return localImage;
+                WebResourceResponse packaged = assetLoader.shouldInterceptRequest(uri);
+                return packaged != null ? packaged : interceptPackagedAsset(uri);
+            }
+
+            @Override public void onReceivedError(WebView view, WebResourceRequest request,
+                    android.webkit.WebResourceError error) {
+                super.onReceivedError(view, request, error);
+                if (request.isForMainFrame()) {
+                    android.util.Log.e("NidoWebView", "Main document load failed: "
+                            + request.getUrl() + " code=" + error.getErrorCode()
+                            + " description=" + error.getDescription());
+                }
+            }
+
+            @Override public void onReceivedHttpError(WebView view, WebResourceRequest request,
+                    WebResourceResponse response) {
+                super.onReceivedHttpError(view, request, response);
+                if (request.isForMainFrame()) {
+                    android.util.Log.e("NidoWebView", "Main document HTTP error: "
+                            + request.getUrl() + " status=" + response.getStatusCode());
+                }
             }
 
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -427,6 +451,52 @@ public class MainActivity extends Activity {
         File target = new File(directory, name);
         try (FileOutputStream output = new FileOutputStream(target)) { output.write(image); }
         return "https://appassets.androidplatform.net/nido-images/" + name;
+    }
+
+    /**
+     * Last-resort reader for APK assets. WebViewAssetLoader remains the primary
+     * handler, but a null response must not turn a packaged index.html into a
+     * network-style resource failure on vendor WebView implementations.
+     */
+    private WebResourceResponse interceptPackagedAsset(Uri uri) {
+        if (uri == null || !"https".equalsIgnoreCase(uri.getScheme())
+                || !"appassets.androidplatform.net".equalsIgnoreCase(uri.getHost())) return null;
+        String path = uri.getPath();
+        if (path == null || path.isEmpty() || "/".equals(path)) path = "/index.html";
+        if (!path.startsWith("/") || path.contains("..") || path.contains("\\\\")) return null;
+        String assetPath = path.substring(1);
+        if (assetPath.isEmpty()) return null;
+        try {
+            InputStream stream = getAssets().open(assetPath);
+            String lower = assetPath.toLowerCase(java.util.Locale.ROOT);
+            String mime = "application/octet-stream";
+            if (lower.endsWith(".html") || lower.endsWith(".htm")) mime = "text/html";
+            else if (lower.endsWith(".js") || lower.endsWith(".mjs")) mime = "application/javascript";
+            else if (lower.endsWith(".css")) mime = "text/css";
+            else if (lower.endsWith(".json") || lower.endsWith(".map")) mime = "application/json";
+            else if (lower.endsWith(".svg")) mime = "image/svg+xml";
+            else if (lower.endsWith(".png")) mime = "image/png";
+            else if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) mime = "image/jpeg";
+            else if (lower.endsWith(".webp")) mime = "image/webp";
+            else if (lower.endsWith(".woff")) mime = "font/woff";
+            else if (lower.endsWith(".woff2")) mime = "font/woff2";
+            else if (lower.endsWith(".ttf")) mime = "font/ttf";
+            else if (lower.endsWith(".otf")) mime = "font/otf";
+            String encoding = (mime.startsWith("text/") || mime.contains("javascript")
+                    || mime.contains("json") || mime.contains("svg")) ? "UTF-8" : null;
+            WebResourceResponse response = new WebResourceResponse(mime, encoding, stream);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                Map<String, String> headers = new HashMap<>();
+                headers.put("Cache-Control", "no-cache");
+                headers.put("Access-Control-Allow-Origin", "*");
+                response.setResponseHeaders(headers);
+            }
+            android.util.Log.i("NidoWebView", "Served packaged asset fallback: " + assetPath);
+            return response;
+        } catch (Exception error) {
+            android.util.Log.w("NidoWebView", "Packaged asset not found: " + assetPath, error);
+            return null;
+        }
     }
 
     private WebResourceResponse interceptNidoImage(Uri uri) {
