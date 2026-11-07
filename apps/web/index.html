@@ -903,7 +903,7 @@
                     <button v-for="provider in petUi.ai.providers" :key="provider.id" type="button" :class="{active:petUi.ai.provider===provider.id}" @click="petUi.applyPetAiPreset(provider.id)">{{ provider.label }}</button>
                 </div>
                 <label>Base URL（仅开放安全白名单中的官方 HTTPS 域名）</label>
-                <input v-model="petUi.ai.base_url" placeholder="https://api.openai.com/v1">
+                <input v-model="petUi.ai.base_url" placeholder="OpenCode Go: https://opencode.ai/zen/go">
                 <label>API Key（只在服务端加密保存）</label>
                 <input v-model="petUi.ai.api_key" type="password" autocomplete="new-password" placeholder="sk-..." @focus="petUi.ai.api_key.includes('***') && (petUi.ai.api_key='')">
                 <label>Model</label>
@@ -994,9 +994,10 @@
                     </div>
                     <template v-if="port.id !== 'cc'">
                         <label>API 协议</label>
-                        <select v-model="port.provider" @change="saveChatroomPorts">
+                        <select v-model="port.provider" @change="onChatroomProviderChange(port)">
                             <option value="auto">自动识别</option>
                             <option value="openai">OpenAI</option>
+                            <option value="opencode-go">OpenCode Go（订阅）</option>
                             <option value="anthropic">Anthropic / Claude</option>
                             <option value="deepseek">DeepSeek</option>
                             <option value="compatible">其他 OpenAI-compatible</option>
