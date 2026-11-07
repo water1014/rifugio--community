@@ -1133,7 +1133,7 @@ window.Rifugio.useTalkStream = function(ctx) {
                                 }),
                             });
                         if (!r.ok) {
-                            const detailText = await r.text().catch(() => '');
+                            const detailText = r.nativeError || await r.text().catch(() => '');
                             let detail = detailText;
                             try {
                                 const parsed = JSON.parse(detailText);
