@@ -77,3 +77,11 @@ These features may later be offered as optional add-ons, but the app must remain
 - WebView JavaScript bridges must expose only narrow, validated methods. Do not expose arbitrary file access, shell execution, or unrestricted URL fetching.
 - Restrict navigation to the bundled app and explicitly approved HTTPS provider requests.
 - Treat all model output and imported data as untrusted content.
+
+## Implementation status (2026-11-07)
+
+### L0 packaging work started
+- Android now loads the bundled app at `https://appassets.androidplatform.net/index.html` through AndroidX `WebViewAssetLoader`; it no longer shows the server-address setup screen or offers a server-address menu action.
+- CI copies the full `apps/web` static tree into the APK assets before Gradle packaging.
+- The lock screen recognizes the bundled Android asset origin as local mode and skips the server-backed password check. This is not a claim that the rest of the web app is already backend-independent.
+- Build/installation and on-device UI verification are still pending. The local provider chat, local storage migration, and WorkManager proactive-message milestones have not yet been implemented.
