@@ -29,13 +29,16 @@ The current Web Push subscription is a browser Service Worker subscription. It i
 Target Android delivery:
 
 - Native Android notification channels and Android 13+ notification permission.
-- Firebase Cloud Messaging (FCM) or another verified native push transport for terminated/background app delivery.
+- A native Firebase Messaging service now receives messages, renders high-importance notifications, persists registration tokens, and forwards notification-tap conversation IDs into the Talk UI.
+- The server now has authenticated Android token registration, encrypted token-at-rest storage, and an FCM HTTP v1 sender using a service-account JSON secret from the environment.
+- The proactive scheduler fans out to both existing Web Push subscriptions and registered Android devices.
+- FCM remains unconfigured until an app-specific `google-services.json` is supplied to the Android build and `FCM_SERVICE_ACCOUNT_JSON` (raw JSON or base64 JSON) is configured on the server.
 - Backend stores per-install push tokens securely and sends notifications when the proactive scheduler creates a message.
 - Notification payload contains a conversation ID and message ID; tapping it opens that exact conversation in Nido.
 - Deduplicate notifications and messages, remove expired device tokens, and never put private message bodies in logs.
 - Keep Web Push for ordinary browser/PWA users; native FCM is a separate Android transport.
 
-FCM needs an app-specific Firebase project configuration and server-side credentials. These are deployment inputs, not values to guess or commit. The Android build must remain reproducible without those secrets, while clearly reporting that native push is not configured until valid Firebase settings are supplied.
+FCM needs an app-specific Firebase project configuration and server-side credentials. These are deployment inputs, not values to guess or commit. The Android build must remain reproducible without those secrets, while clearly reporting that native push is not configured until valid Firebase settings are supplied. Firebase's official Android setup requires Google Play services on the target device; devices without Google Play services need a separately implemented transport and must not be promised FCM delivery.
 
 ## Android application requirements
 
