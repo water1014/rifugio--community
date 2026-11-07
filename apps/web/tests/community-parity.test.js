@@ -59,6 +59,7 @@ assert.ok(!app.includes("port.id === 'cc' ||"), 'changing the CC seat to an exte
 assert.equal((app.match(/const isCc = \/\^\\\/api\\\/chatroom-cc/g) || []).length, 2, 'only the same-origin CC shim may use the direct seat path');
 assert.match(talk, /apiProtocol:\s*'opencode-go'/, 'Nido Talk must default relay APIs to OpenCode Go');
 assert.match(talk, /provider: 'openai-compatible'/, 'Nido Talk must use the API provider instead of Claude Terminal by default');
+assert.match(talk, /talkSettings\.claudeExecutionMode = 'agent';\s*talkSettings\.executionMode = 'agent'/, 'Nido Talk must migrate legacy Claude Terminal preferences to API execution');
 assert.match(talkStream, /\['opencode-go', 'deepseek'\]\.includes\(talkSettings\.apiProtocol\)/, 'Talk chat must preserve explicit OpenCode Go and DeepSeek provider identifiers');
 assert.match(talk, /'\/api\/talk-api\/v1\/models'/, 'Talk model lookup must use the protocol-aware backend route');
 assert.match(talkStream, /provider:talkSettings\.apiProtocol === 'anthropic' \? 'anthropic' : \(\['opencode-go', 'deepseek'\]\.includes\(talkSettings\.apiProtocol\) \? talkSettings\.apiProtocol : 'compatible'\)/, 'Talk chat must preserve OpenCode Go and DeepSeek provider identifiers');
