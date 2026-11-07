@@ -61,7 +61,7 @@ assert.match(talk, /apiProtocol:\s*'opencode-go'/, 'Nido Talk must default relay
 assert.match(talk, /provider: 'openai-compatible'/, 'Nido Talk must use the API provider instead of Claude Terminal by default');
 assert.match(talkStream, /\['opencode-go', 'deepseek'\]\.includes\(talkSettings\.apiProtocol\)/, 'Talk chat must preserve explicit OpenCode Go and DeepSeek provider identifiers');
 assert.match(talk, /'\/api\/talk-api\/v1\/models'/, 'Talk model lookup must use the protocol-aware backend route');
-assert.match(talkStream, /provider:talkSettings\.apiProtocol === 'anthropic' \? 'anthropic' : 'compatible'/, 'Talk chat must honor the explicit API protocol');
+assert.match(talkStream, /provider:talkSettings\.apiProtocol === 'anthropic' \? 'anthropic' : \(\['opencode-go', 'deepseek'\]\.includes\(talkSettings\.apiProtocol\) \? talkSettings\.apiProtocol : 'compatible'\)/, 'Talk chat must preserve OpenCode Go and DeepSeek provider identifiers');
 assert.doesNotMatch(talkStream, /provider:'auto'/, 'Claude-named relay models must not silently switch to Anthropic auth');
 assert.match(index, /OpenAI 兼容（Bearer · \/chat\/completions）/, 'Talk settings must explain compatible relay authentication');
 assert.match(index, /Anthropic 原生（x-api-key · \/messages）/, 'Talk settings must keep native Anthropic as an explicit option');
