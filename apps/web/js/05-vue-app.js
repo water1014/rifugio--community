@@ -2003,6 +2003,7 @@
                         provider:port.provider || 'auto',
                         base_url:port.base_url,
                         api_key:port.api_key,
+                        custom_headers:port.custom_headers,
                         rifugio_experience:port.rifugio_experience === true,
                         cache_namespace:'chatroom:' + port.id
                     });
