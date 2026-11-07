@@ -124,6 +124,17 @@ public class MainActivity extends Activity {
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
         webView.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onConsoleMessage(android.webkit.ConsoleMessage message) {
+                if (message != null && message.messageLevel() == android.webkit.ConsoleMessage.MessageLevel.ERROR) {
+                    android.util.Log.e("NidoWebConsole",
+                            message.message() + " at " + message.sourceId() + ":" + message.lineNumber());
+                } else if (message != null && message.messageLevel() == android.webkit.ConsoleMessage.MessageLevel.WARNING) {
+                    android.util.Log.w("NidoWebConsole",
+                            message.message() + " at " + message.sourceId() + ":" + message.lineNumber());
+                }
+                return true;
+            }
+
             @Override public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback,
                     FileChooserParams params) {
                 if (fileChooserCallback != null) fileChooserCallback.onReceiveValue(null);
