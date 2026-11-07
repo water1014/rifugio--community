@@ -19,7 +19,7 @@ Standalone voice input uses the device/WebView speech-recognition capability whe
 
 ## Build
 
-The workflow .github/workflows/android-apk.yml validates the complete Vue template, web scripts, and tests before building a debug APK on pushes to feature/android-api-providers.
+The workflow `.github/workflows/android-apk.yml` validates the complete Vue template, web scripts, and tests before building a debug APK on pushes to `feature/android-api-providers` and `feature/nido-android-rebuild`.
 
 After a successful run, open the workflow's **Artifacts** section and download nido-android-debug-apk.
 
