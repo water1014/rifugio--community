@@ -23,6 +23,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      # Keep the Android debug signing identity stable across CI builds so
+      # an installed test APK can be updated without wiping its app data.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: nido-android-debug-keystore-v1
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
@@ -61,7 +67,7 @@ jobs:
           cp -R apps/web/. android-shell/app/src/main/assets/
       - name: Build debug APK
         working-directory: android-shell
-        run: gradle --no-daemon assembleDebug
+        run: gradle --no-daemon -PnidoVersionCode=${{ github.run_number }} assembleDebug
       - uses: actions/upload-artifact@v4
         with:
           name: nido-android-debug-apk
