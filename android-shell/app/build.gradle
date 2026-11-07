@@ -5,6 +5,8 @@ if (file('google-services.json').exists()) {
     apply plugin: 'com.google.gms.google-services'
 }
 
+def nidoVersionCode = providers.gradleProperty('nidoVersionCode').getOrElse('1').toInteger()
+
 android {
     namespace 'app.rifugio.shell'
     compileSdk 35
@@ -12,7 +14,7 @@ android {
         applicationId 'app.rifugio.shell'
         minSdk 23
         targetSdk 35
-        versionCode (project.findProperty('nidoVersionCode') ?: '1').toString().toInteger()
+        versionCode = nidoVersionCode
         versionName '0.1.0'
     }
 }
