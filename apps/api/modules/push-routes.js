@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { validatePublicBaseUrl } = require('./chatroom-api');
 
 function createPushRoutes({ readJsonSetting, writeJsonSetting, isAuthed, encrypt, decrypt }) {
   const PUSH_VAPID_KEYS_KEY = 'push_vapid_keys';
@@ -182,7 +183,7 @@ function createPushRoutes({ readJsonSetting, writeJsonSetting, isAuthed, encrypt
     const keys = subscription.keys || {};
     const p256dh = String(keys.p256dh || '').trim();
     const auth = String(keys.auth || '').trim();
-    if (!endpoint || !p256dh || !auth) return null;
+    if (!endpoint || endpoint.length > 2048 || !p256dh || !auth) return null;
     return {
       id: crypto.createHash('sha256').update(endpoint).digest('hex').slice(0, 24),
       endpoint,
@@ -249,6 +250,7 @@ function createPushRoutes({ readJsonSetting, writeJsonSetting, isAuthed, encrypt
     let sent = 0, failed = 0;
     for (const sub of rows) {
       try {
+        await validatePublicBaseUrl(sub.endpoint);
         await webPush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, body, { TTL: 3600, urgency: 'high' });
         sent += 1;
         alive.push(sub);
@@ -285,8 +287,14 @@ function createPushRoutes({ readJsonSetting, writeJsonSetting, isAuthed, encrypt
       });
     });
 
-    app.post('/api/push/subscribe', (req, res) => {
+    app.post('/api/push/subscribe', async (req, res) => {
       if (!requireOwner(req, res)) return;
+      const endpoint = req.body?.subscription?.endpoint || req.body?.endpoint || '';
+      try {
+        await validatePublicBaseUrl(endpoint);
+      } catch (error) {
+        return res.status(400).json({ ok: false, error: error.message || 'invalid push endpoint' });
+      }
       const saved = upsertPushSubscription(req.body || {});
       if (!saved) return res.status(400).json({ ok: false, error: 'invalid push subscription' });
       res.json({ ok: true, id: saved.id, count: readPushSubscriptions().length });
