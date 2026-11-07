@@ -474,7 +474,7 @@ window.Rifugio.useTalk = function(ctx) {
             const saveTalkProfile = () => {
                 try { localStorage.setItem('rifugio-talk-profile', JSON.stringify({ ...talkProfile })); } catch(_) {}
             };
-            if (!savedTalkProfile) {
+            if (!savedTalkProfile && !isNidoLocalApp()) {
                 fetch('/api/community/config', { credentials:'same-origin', cache:'no-store' })
                     .then(r => r.ok ? r.json() : null)
                     .then(config => {
