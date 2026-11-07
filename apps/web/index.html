@@ -3319,7 +3319,7 @@
             </div>
 
             <!-- ===================== HEALTH ===================== -->
-            <div v-else-if="mainTab === 'piani'" key="piani" class="px-8 pt-8 fade-enter-active">
+            <div v-if="mainTab === 'piani'" key="piani" class="px-8 pt-8 fade-enter-active">
                 <div class="text-[9px] uppercase tracking-widest text-stone-500 mb-6">Piani · 计划台账</div>
                 <div class="flex items-center mb-8 border-b border-red-900/30 pb-2">
                     <span class="text-red-900 mr-3">+</span>
