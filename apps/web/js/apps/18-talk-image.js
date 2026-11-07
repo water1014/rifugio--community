@@ -217,6 +217,10 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
                 const parameters = { ...(config.parameters || {}) };
                 parameters.seed = finalSeed;
                 parameters.negative_prompt = negative;
+                parameters.controlnet_strength = 1;
+                parameters.legacy = false;
+                parameters.add_original_image = true;
+                parameters.legacy_v3_extend = false;
                 if (/^nai-diffusion-4/i.test(String(config.model || ''))) {
                     const centers = {
                         1:[0.5], 2:[0.45,0.55], 3:[0.3,0.5,0.7],
