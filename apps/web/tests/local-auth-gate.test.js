@@ -16,7 +16,7 @@ test('Termux localhost and 127.0.0.1 require a real server login', () => {
   assert.equal(evaluate({ location:{ protocol:'http:', hostname:'localhost' } }), false);
   assert.equal(evaluate({ location:{ protocol:'https:', hostname:'example.com' } }), false);
   assert.equal(evaluate({ location:{ protocol:'file:', hostname:'' } }), true);
-  assert.match(html, /04-lock-screen\.js\?v=termux-local-auth-20260722/, 'auth fix needs a fresh cachebuster');
+  assert.match(html, /04-lock-screen\.js\?v=nido-local-lock-20261107/, 'auth fix needs a fresh cachebuster');
 });
 
 test('model pull explains missing configuration before making an API request', () => {
