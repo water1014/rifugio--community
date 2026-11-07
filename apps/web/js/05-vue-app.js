@@ -94,8 +94,8 @@
 
             const DEFAULT_PHONE_APPS = [
                 // Dock：常驻四个核心 App
-                { id:'talk',      label:'对话', title:'Chat · 对话', subtitle:'Claude Code · Pro interactive', tab:'museo', sub:'talk', icon:'💬', dock:true },
-                { id:'chatroom',  label:'聊天室', title:'Room · 聊天室', subtitle:'CC / GPT / DeepSeek / games', tab:'chatroom', icon:'🫧' },
+                { id:'talk',      label:'对话', title:'Chat · 对话', subtitle:'Nido · 私人对话', tab:'museo', sub:'talk', icon:'💬', dock:true },
+                { id:'chatroom',  label:'聊天室', title:'Room · 聊天室', subtitle:'多模型协作与轻量互动', tab:'chatroom', icon:'🫧' },
                 { id:'room',      label:'小屋', title:'Crab Room · 小屋', subtitle:'一只住在这里的小螃蟹', tab:'room', icon:'🦀' },
                 { id:'memoria',   label:'记忆', title:'Memoria · 记忆', subtitle:'Dashboard / Buckets / Import / Search', tab:'memoria', sub:'dashboard', icon:'🧠', dock:true },
                 { id:'segreti',   label:'秘密', title:'Secrets · 秘密', subtitle:'Soul & Desires', tab:'abisso', sub:'desideri', icon:'🌙', dock:true },
