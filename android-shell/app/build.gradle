@@ -20,4 +20,5 @@ android {
 dependencies {
     // Firebase Messaging is optional at runtime until a project-specific google-services.json is added.
     implementation 'com.google.firebase:firebase-messaging:24.1.0'
+    implementation 'org.unifiedpush.android:connector:3.3.5'
 }
