@@ -131,11 +131,21 @@ test('Android push sender uses FCM HTTP v1 with the notified conversation identi
 
 test('Web Push registration rejects private-network endpoints and accepts public HTTPS endpoints', async t => {
   const originalLookup = dns.lookup;
+  const originalVapidPublic = process.env.WEB_PUSH_PUBLIC_KEY;
+  const originalVapidPrivate = process.env.WEB_PUSH_PRIVATE_KEY;
+  delete process.env.WEB_PUSH_PUBLIC_KEY;
+  delete process.env.WEB_PUSH_PRIVATE_KEY;
   dns.lookup = async hostname => {
     if (hostname === '127.0.0.1' || hostname === 'localhost') return [{ address:'127.0.0.1', family:4 }];
     return [{ address:'8.8.8.8', family:4 }];
   };
-  t.after(() => { dns.lookup = originalLookup; });
+  t.after(() => {
+    dns.lookup = originalLookup;
+    if (originalVapidPublic === undefined) delete process.env.WEB_PUSH_PUBLIC_KEY;
+    else process.env.WEB_PUSH_PUBLIC_KEY = originalVapidPublic;
+    if (originalVapidPrivate === undefined) delete process.env.WEB_PUSH_PRIVATE_KEY;
+    else process.env.WEB_PUSH_PRIVATE_KEY = originalVapidPrivate;
+  });
 
   const handlers = {};
   const store = new Map();
@@ -182,6 +192,13 @@ test('Web Push registration rejects private-network endpoints and accepts public
   assert.equal(typeof store.get('push_subscriptions')[0].dataEnc, 'string');
   assert.equal(Object.hasOwn(store.get('push_subscriptions')[0], 'endpoint'), false);
   assert.equal(Object.hasOwn(store.get('push_subscriptions')[0], 'keys'), false);
+
+  const vapidResponse = makeResponse();
+  handlers['GET /api/push/vapid-public-key']({}, vapidResponse);
+  assert.equal(vapidResponse.body.ok, true);
+  const storedVapid = store.get('push_vapid_keys');
+  assert.equal(typeof storedVapid.privateKeyEnc, 'string');
+  assert.equal(Object.hasOwn(storedVapid, 'privateKey'), false);
 });
 
 test('push test endpoint is owner-authenticated and fans out to native delivery', async () => {
