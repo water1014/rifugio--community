@@ -17,6 +17,7 @@ import android.view.View;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -26,6 +27,7 @@ import android.content.Context;
 import android.widget.Toast;
 
 import androidx.core.content.ContextCompat;
+import androidx.webkit.WebViewAssetLoader;
 
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.messaging.FirebaseMessaging;
@@ -38,12 +40,14 @@ import org.json.JSONObject;
 public class MainActivity extends Activity {
     private static final String PREFS = "nido_app";
     private static final String KEY_SERVER = "server_url";
+    private static final String LOCAL_APP_URL = "https://appassets.androidplatform.net/index.html";
     static final String ACTION_PUSH_TOKEN_REFRESHED = "app.rifugio.shell.PUSH_TOKEN_REFRESHED";
     static final String ACTION_UNIFIED_PUSH_UPDATED = "app.rifugio.shell.UNIFIED_PUSH_UPDATED";
     static final String EXTRA_CONVERSATION_ID = "nido_conversation_id";
     static final String EXTRA_MESSAGE_ID = "nido_message_id";
     private WebView webView;
     private SharedPreferences prefs;
+    private WebViewAssetLoader assetLoader;
     private boolean unifiedPushReceiverRegistered = false;
     private final BroadcastReceiver unifiedPushReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
@@ -64,9 +68,9 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 26) systemUi |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
         getWindow().getDecorView().setSystemUiVisibility(systemUi);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        registerUnifiedPushReceiver();
-        createNotificationChannel();
-        requestNotificationPermission();
+        assetLoader = new WebViewAssetLoader.Builder()
+                .addPathHandler("/", new WebViewAssetLoader.AssetsPathHandler(this))
+                .build();
 
         webView = new WebView(this);
         setContentView(webView);
@@ -74,24 +78,30 @@ public class MainActivity extends Activity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
-        settings.setAllowFileAccess(true);
+        settings.setAllowFileAccess(false);
         settings.setAllowFileAccessFromFileURLs(false);
         settings.setAllowUniversalAccessFromFileURLs(false);
         settings.setAllowContentAccess(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
         webView.setWebChromeClient(new WebChromeClient());
-        webView.setOnLongClickListener(view -> {
-            if (!prefs.getString(KEY_SERVER, "").isEmpty()) {
-                showSetup();
-                return true;
-            }
-            return false;
-        });
         webView.setWebViewClient(new WebViewClient() {
+            @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                return assetLoader.shouldInterceptRequest(request.getUrl());
+            }
+
+            @Override public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
+                return assetLoader.shouldInterceptRequest(Uri.parse(url));
+            }
+
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
-                return !"https".equalsIgnoreCase(uri.getScheme());
+                if ("appassets.androidplatform.net".equalsIgnoreCase(uri.getHost())
+                        && "https".equalsIgnoreCase(uri.getScheme())) return false;
+                if ("https".equalsIgnoreCase(uri.getScheme())) {
+                    try { startActivity(new Intent(Intent.ACTION_VIEW, uri)); } catch (Exception ignored) {}
+                }
+                return true;
             }
 
             @Override public void onPageFinished(WebView view, String url) {
@@ -104,13 +114,11 @@ public class MainActivity extends Activity {
             }
         });
 
-        String server = prefs.getString(KEY_SERVER, "");
-        if (server.isEmpty()) showSetup();
-        else {
-            attachNativeBridge();
-            webView.loadUrl(server);
-            requestFirebaseToken();
-        }
+        // Nido is local-first: the complete web app is packaged inside this APK.
+        // Keep the synthetic HTTPS origin so same-origin storage and root-relative assets work.
+        prefs.edit().putString(KEY_SERVER, LOCAL_APP_URL).apply();
+        attachNativeBridge();
+        webView.loadUrl(LOCAL_APP_URL);
     }
 
     @Override protected void onNewIntent(Intent intent) {
@@ -242,12 +250,6 @@ public class MainActivity extends Activity {
         intent.removeExtra("messageId");
     }
 
-    private void showSetup() {
-        webView.removeJavascriptInterface("NidoNative");
-        webView.addJavascriptInterface(new SetupBridge(), "RifugioNative");
-        webView.loadUrl("file:///android_asset/setup.html");
-    }
-
     private final class NidoBridge {
         @JavascriptInterface public String getPushToken() {
             return getSharedPreferences(NidoMessagingService.PREFS, MODE_PRIVATE)
@@ -310,28 +312,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    private final class SetupBridge {
-        @JavascriptInterface public void connect(String raw) {
-            runOnUiThread(() -> {
-                String value = raw == null ? "" : raw.trim().replaceAll("/+$", "");
-                Uri uri = Uri.parse(value);
-                if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null) {
-                    Toast.makeText(MainActivity.this, "请输入有效的 HTTPS 服务器地址", Toast.LENGTH_LONG).show();
-                    return;
-                }
-                prefs.edit().putString(KEY_SERVER, value).apply();
-                webView.removeJavascriptInterface("RifugioNative");
-                webView.removeJavascriptInterface("NidoNative");
-                attachNativeBridge();
-                webView.loadUrl(value);
-                requestFirebaseToken();
-            });
-        }
-        @JavascriptInterface public String current() {
-            return prefs.getString(KEY_SERVER, "");
-        }
-    }
-
     @Override protected void onDestroy() {
         if (unifiedPushReceiverRegistered) {
             try { unregisterReceiver(unifiedPushReceiver); } catch (Exception ignored) {}
@@ -342,15 +322,10 @@ public class MainActivity extends Activity {
 
     @Override public boolean onCreateOptionsMenu(Menu menu) {
         menu.add("重新加载");
-        menu.add("更改服务器地址");
         return true;
     }
 
     @Override public boolean onOptionsItemSelected(MenuItem item) {
-        if ("更改服务器地址".contentEquals(item.getTitle())) {
-            showSetup();
-            return true;
-        }
         if ("重新加载".contentEquals(item.getTitle())) {
             webView.reload();
             return true;
