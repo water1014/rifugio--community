@@ -14,7 +14,7 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
 
             // ── 生图 NovelAI：key + 出图参数 + 预设组 存后端（这样 CC 的 generate_image MCP 也能用）──
             const imageStudio = reactive({
-                presets:[], activePresetId:'', hasKey:false, keyHint:'',
+                presets:[], activePresetId:'', hasKey:false, keyHint:'', localMode:Boolean(window.NidoNative),
                 testStatus:'', saveStatus:'',
                 testPrompt:'', testGenerateStatus:'', testGenerating:false, testImages:[], testLastObjectUrls:[],
                 runTestGenerate:null, composeTestPrompt:null, composeTestNegative:null, activePresetName:null,
@@ -139,6 +139,73 @@ window.Rifugio.useTalkImageStudio = function(ctx) {
                 const key = String(talkSettings.naiApiKey || '').trim();
                 if (opts.includeKey && key) body.apiKey = key;
                 return body;
+            };
+            const NIDO_IMAGE_CONFIG_LS = 'nido-local-image-config-v1';
+            const saveNidoImageConfig = () => {
+                const body = buildImageConfigPayload({ includeKey:false });
+                body.presets = Array.isArray(imageStudio.presets) ? imageStudio.presets : [];
+                body.activePresetId = imageStudio.activePresetId || '';
+                delete body.apiKey;
+                try { localStorage.setItem(NIDO_IMAGE_CONFIG_LS, JSON.stringify(body)); } catch(_) {}
+                const key = String(talkSettings.naiApiKey || '').trim();
+                try {
+                    if (window.NidoNative?.setSecret) window.NidoNative.setSecret('talk_nai_api_key', key);
+                } catch(_) {}
+                imageStudio.hasKey = !!key;
+                imageStudio.keyHint = key ? key.slice(0, 4) + '…' + key.slice(-2) : '';
+                return body;
+            };
+            const buildNaiLocalRequest = (scene) => {
+                const config = buildImageConfigPayload({ includeKey:false });
+                const preset = imageStudio.presets.find(p => p && p.id === imageStudio.activePresetId) || null;
+                const presetChars = preset?.character ? String(preset.character).split(/\n+/).map(v => v.trim()).filter(Boolean) : [];
+                const characters = preset?.lockCharacters && presetChars.length
+                    ? presetChars
+                    : (presetChars.length > 1 ? presetChars : []);
+                const singleCharacter = !characters.length && presetChars.length === 1 ? presetChars[0] : '';
+                const positive = [preset?.prompt, singleCharacter, scene].map(v => String(v || '').trim()).filter(Boolean).join(', ');
+                if (!positive && !characters.length) throw new Error('没有正向提示词，请填写场景或选择画师预设组');
+                const negative = String(preset?.negative || talkSettings.naiNegativePrompt || '').trim();
+                const seed = normalizeNaiSeed();
+                const finalSeed = seed && seed > 0 ? seed : Math.floor(Math.random() * 4294967295) + 1;
+                const parameters = { ...(config.parameters || {}) };
+                parameters.seed = finalSeed;
+                parameters.negative_prompt = negative;
+                if (/^nai-diffusion-4/i.test(String(config.model || ''))) {
+                    const centers = {
+                        1:[0.5], 2:[0.45,0.55], 3:[0.3,0.5,0.7],
+                        4:[0.25,0.42,0.58,0.75], 5:[0.2,0.35,0.5,0.65,0.8],
+                        6:[0.17,0.3,0.43,0.57,0.7,0.83],
+                    }[Math.min(6, characters.length)] || [];
+                    parameters.use_coords = false;
+                    parameters.characterPrompts = characters.map((value, index) => ({
+                        prompt:value, uc:'', center:{ x:centers[index], y:0.5 }, enabled:true,
+                    }));
+                    parameters.v4_prompt = {
+                        caption:{
+                            base_caption:positive,
+                            char_captions:characters.map((value,index)=>({
+                                char_caption:value, centers:[{x:centers[index],y:0.5}],
+                            })),
+                        },
+                        use_coords:false, use_order:true,
+                    };
+                    parameters.v4_negative_prompt = {
+                        caption:{
+                            base_caption:negative,
+                            char_captions:characters.map((_,index)=>({
+                                char_caption:'', centers:[{x:centers[index],y:0.5}],
+                            })),
+                        },
+                        legacy_uc:false, use_coords:false, use_order:false,
+                    };
+                }
+                return {
+                    input:positive,
+                    model:String(config.model || 'nai-diffusion-4-5-full'),
+                    action:'generate',
+                    parameters,
+                };
             };
             const getActiveImagePreset = () => imageStudio.presets.find(p => p && p.id === imageStudio.activePresetId) || null;
             const activePresetName = () => {
