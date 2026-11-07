@@ -13,9 +13,9 @@ Nido is a **standalone, local-first Android app**. It does not require a self-ho
 
 ## What does not require a server
 
-Chat, local conversation history, local memories/settings, NovelAI generation, and scheduled proactive messages are designed to work without a Nido backend.
+Chat, local conversation history, local memories (including Feel, manual edits, pin/archive/delete and keyword search), favorite quotes, moments/comments, AI sticker library, NovelAI generation, and scheduled proactive messages are designed to work without a Nido backend. Structured JSON memory files can be selected from Android's system file picker and imported locally.
 
-Server-dependent community features such as account login, cross-device sync, cloud backup, and remote push-distributor registration are not part of the standalone Android flow. Local notifications do not require those services.
+Server-dependent community features such as account login, cross-device sync, cloud backup, vector Embedding, automatic Dream/AI memory extraction, remote social feeds, and remote push-distributor registration are not part of the standalone Android flow yet. Local notifications do not require those services. Local keyword search does not upload memory content.
 
 ## Build
 
