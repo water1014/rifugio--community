@@ -754,6 +754,7 @@ window.Rifugio.useMemoria = function(ctx) {
 
             const onMemProviderChange = () => {
                 memSettings.model = '';
+                availableModels.value = [];
                 if (memSettings.provider === 'opencode-go' && (!memSettings.base_url || !memSettings.base_url.includes('opencode.ai'))) {
                     memSettings.base_url = 'https://opencode.ai/zen/go';
                 } else if (memSettings.provider === 'deepseek' && (!memSettings.base_url || memSettings.base_url.includes('opencode.ai'))) {
