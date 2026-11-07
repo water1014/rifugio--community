@@ -428,11 +428,13 @@ function mountProviderApiRoutes(app, options = {}) {
       if (!apiKey || !model || !baseUrl) throw new Error('base_url / api_key / model 必填');
       if (!Array.isArray(body.messages) || !body.messages.length) throw new Error('messages required');
       const provider = providerFor(body.provider, baseUrl, model);
-      const customHeaders = normalizeCustomHeaders(body.custom_headers);
       auditProvider = provider;
       auditModel = model;
       const checked = await validatePublicBaseUrl(baseUrl);
       const endpoint = endpointFor(checked.toString().replace(/\/$/, ''), provider);
+      const customHeaders = withOpenCodeSession(
+        body.custom_headers, endpoint, String(body.cache_namespace || defaultNamespace), model
+      );
       const capabilities = [];
       if (body.rifugio_memory === true) capabilities.push('memory');
       if (body.rifugio_tools === true) capabilities.push('media');
