@@ -85,3 +85,11 @@ These features may later be offered as optional add-ons, but the app must remain
 - CI copies the full `apps/web` static tree into the APK assets before Gradle packaging.
 - The lock screen recognizes the bundled Android asset origin as local mode and skips the server-backed password check. This is not a claim that the rest of the web app is already backend-independent.
 - Build/installation and on-device UI verification are still pending. The local provider chat, local storage migration, and WorkManager proactive-message milestones have not yet been implemented.
+
+### L1 local provider and storage progress
+- Added an asynchronous Android HTTPS POST bridge for JSON provider requests. It rejects non-HTTPS URLs, private/loopback/link-local destinations, unsafe headers, oversized payloads, and redirects.
+- Nido Talk's OpenCode Go, DeepSeek, and OpenAI-compatible chat completion path now calls the configured provider directly from Android instead of requiring `/api/talk-api/v1/chat/completions`. OpenCode Go receives a stable local session header. Anthropic Messages protocol is explicitly not enabled in the no-backend native path.
+- API credentials (chat, TTS, and NovelAI keys) migrate from the legacy Talk settings entry into AES-GCM encrypted storage backed by Android Keystore. The local settings JSON no longer writes those secret fields after migration.
+- Local Android mode no longer fetches or pushes Talk conversation lists, message history, or moments to the old server endpoints. Full conversation snapshots are additionally persisted in IndexedDB; localStorage remains a small fast-recovery snapshot.
+- JavaScript syntax checks passed for the changed Talk modules. The GitHub Actions APK build for the latest commit is still running; native compilation and packaging are not yet confirmed.
+- Model discovery, image generation, TTS, proactive scheduling, and all other server-dependent modules still need separate local implementations. The app is not yet a complete backend-free release.
