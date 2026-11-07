@@ -2474,7 +2474,7 @@
                                     <label class="talk-switch mini"><input type="checkbox" v-model="talkSettings.timestampUserMessages"><span>每条用户消息附带当前时间给 AI</span></label>
                                     </template>
                                     <template v-if="talkSettings.provider === 'openai-compatible'">
-                                        <select v-model="talkSettings.apiProtocol" @change="saveTalkSettings">
+                                        <select v-model="talkSettings.apiProtocol" @change="onTalkApiProtocolChange">
                                             <option value="compatible">OpenAI 兼容 / OpenCode Go（Bearer · /chat/completions）</option>
                                             <option value="opencode-go">OpenCode Go 订阅专用</option>
                                             <option value="deepseek">DeepSeek 官方 API</option>
