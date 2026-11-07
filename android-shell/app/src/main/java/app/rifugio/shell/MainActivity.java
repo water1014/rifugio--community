@@ -265,6 +265,19 @@ public class MainActivity extends Activity {
                 }
             });
         }
+        @JavascriptInterface public void refreshUnifiedPush(String vapidPublicKey) {
+            runOnUiThread(() -> {
+                String vapid = vapidPublicKey == null ? "" : vapidPublicKey.trim();
+                if (vapid.length() != 87) return;
+                try {
+                    if (UnifiedPush.getAckDistributor(getApplicationContext()) != null) {
+                        UnifiedPush.register(getApplicationContext(), INSTANCE_DEFAULT, "Nido 消息通知", vapid);
+                    }
+                } catch (Exception error) {
+                    android.util.Log.w("NidoPush", "UnifiedPush re-registration failed: " + error.getMessage());
+                }
+            });
+        }
     }
 
     private final class SetupBridge {
