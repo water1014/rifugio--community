@@ -191,7 +191,7 @@ test('standalone Nido voice uses device speech and skips hosted speech endpoints
 
 test('Android packaged assets are served directly and boot diagnostics report real resource attributes', () => {
   assert.equal((native.match(/WebResourceResponse direct = interceptPackagedAsset\(uri\)/g) || []).length, 2);
-  assert.match(native, /return packaged != null \? packaged : interceptPackagedAsset\(uri\)/);
+  assert.ok(native.indexOf('WebResourceResponse direct = interceptPackagedAsset(uri)') < native.indexOf('return assetLoader.shouldInterceptRequest(uri)'), 'direct APK assets must be attempted before WebViewAssetLoader');
   assert.match(html, /target\.getAttribute\('src'\) \|\| target\.getAttribute\('href'\)/);
   assert.match(html, /（没有设置 src\/href）/);
   assert.doesNotMatch(html, /target && target !== window && target\.src\)/);
