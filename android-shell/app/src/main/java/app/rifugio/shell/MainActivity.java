@@ -340,14 +340,6 @@ public class MainActivity extends Activity {
         super.onDestroy();
     }
 
-    @Override public void onNewIntent(android.content.Intent intent) {
-        super.onNewIntent(intent);
-        setIntent(intent);
-        if (webView != null && webView.getUrl() != null && isConfiguredServerPage(webView.getUrl())) {
-            dispatchPendingNotification(intent);
-        }
-    }
-
     @Override public boolean onCreateOptionsMenu(Menu menu) {
         menu.add("重新加载");
         menu.add("更改服务器地址");
