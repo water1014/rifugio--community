@@ -2452,8 +2452,7 @@
                                         <span>模型</span><em>{{ talkSettings.provider === 'openai-compatible' ? ('API · ' + (talkSettings.apiModel || '未选择模型')) : ('Terminal · ' + (talkSettings.claudeModel || '未选择模型')) }} · 点开设置</em>
                                     </summary>
                                     <select v-model="talkSettings.provider" @change="saveTalkSettings">
-                                        <option value="claude-code">Claude Code / 终端</option>
-                                        <option value="openai-compatible">OpenAI Compatible API</option>
+                                        <option value="openai-compatible">Nido API（OpenCode Go / DeepSeek / 兼容接口）</option>
                                     </select>
                                     <p class="talk-settings-note" v-if="talkSettings.provider === 'openai-compatible'">18app 专属 API：保留本应用的恋爱体验、配置与对话，只走 /api/talk-api；绝不进入聊天室 API、Claude Code 或 Terminal。切换 API 不会改动你保存的 Terminal / -p 偏好。</p>
                                     <template v-if="talkSettings.provider === 'claude-code'">
