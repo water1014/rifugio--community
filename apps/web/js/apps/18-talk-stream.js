@@ -1026,7 +1026,7 @@ window.Rifugio.useTalkStream = function(ctx) {
                 if (/\/models$/i.test(clean)) return clean.replace(/\/models$/i, '/chat/completions');
                 return clean + '/chat/completions';
             };
-            const nidoProviderHeaders = () => {
+            const nidoProviderHeaders = (conversationId='default') => {
                 const headers = { 'Content-Type':'application/json', Authorization:'Bearer ' + String(talkSettings.apiKey || '').trim() };
                 let custom = {};
                 const raw = String(talkSettings.customHeaders || '').trim();
@@ -1045,11 +1045,12 @@ window.Rifugio.useTalkStream = function(ctx) {
                     headers[name] = String(value);
                 }
                 if (talkSettings.apiProtocol === 'opencode-go') {
+                    const sessionKey = 'nido-opencode-session:' + String(conversationId || 'default').slice(0, 180);
                     let session = '';
-                    try { session = localStorage.getItem('nido-opencode-session') || ''; } catch(_) {}
+                    try { session = localStorage.getItem(sessionKey) || ''; } catch(_) {}
                     if (!session) {
                         session = 'ses_' + (window.crypto?.randomUUID?.().replace(/-/g, '').slice(0, 24) || (Date.now().toString(36) + Math.random().toString(36).slice(2, 14)));
-                        try { localStorage.setItem('nido-opencode-session', session); } catch(_) {}
+                        try { localStorage.setItem(sessionKey, session); } catch(_) {}
                     }
                     if (!Object.keys(headers).some(key => key.toLowerCase() === 'x-opencode-session')) headers['x-opencode-session'] = session;
                     if (!Object.keys(headers).some(key => key.toLowerCase() === 'user-agent')) headers['User-Agent'] = 'Nido/Android';
@@ -1183,7 +1184,7 @@ window.Rifugio.useTalkStream = function(ctx) {
                             stream:false,
                             ...(canUseLocalNaiTool ? { tools:[NIDO_NAI_CHAT_TOOL], tool_choice:'auto' } : {}),
                         };
-                        const requestHeaders = nidoProviderHeaders();
+                        const requestHeaders = nidoProviderHeaders(c.id);
                         const requestEndpoint = nidoChatEndpoint(base, talkSettings.apiProtocol);
                         const sendProviderPayload = async (payload) => window.NidoNative?.postJson
                             ? nidoNativePostJson(requestEndpoint, requestHeaders, payload)
