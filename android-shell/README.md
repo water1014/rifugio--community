@@ -30,3 +30,8 @@ The debug APK is for testing only. A daily-use release must be signed with a sta
 - API keys are not embedded in the APK or sent to a Nido server.
 - Do not uninstall the app when updating unless you have exported/backed up anything important.
 - Android may stop background work under battery restrictions; proactive message timing is therefore best-effort and subject to the OS.
+
+
+### Updating the Android test APK safely
+
+The CI workflow caches its generated Android debug signing key and increments the APK version code from the GitHub Actions run number. Install the first APK produced after this signing-cache change as the baseline for subsequent in-place test updates. GitHub Actions caches can eventually be evicted, so this is a practical test-build safeguard, not a permanent production signing-key solution. Do not uninstall the app to resolve a signature mismatch if local data matters. A permanent release requires a private, backed-up signing keystore configured as GitHub Actions secrets.
