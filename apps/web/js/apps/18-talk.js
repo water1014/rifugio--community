@@ -580,6 +580,29 @@ window.Rifugio.useTalk = function(ctx) {
                 saveTalkSettings();
                 scheduleTalkProactive();
             };
+            Vue.watch(() => [
+                talkSettings.proactiveEnabled,
+                talkSettings.proactiveScriptEnabled,
+                talkSettings.proactiveMinMinutes,
+                talkSettings.proactiveRandomMinutes,
+                talkSettings.proactiveStartTime,
+                talkSettings.proactiveEndTime,
+                talkSettings.proactiveTimezone,
+                talkSettings.proactiveText,
+                talkSettings.apiProtocol,
+                talkSettings.baseUrl,
+                talkSettings.apiKey,
+                talkSettings.apiModel,
+                talkSettings.customHeaders,
+            ], () => {
+                saveTalkSettings();
+                scheduleTalkProactive();
+            });
+            Vue.watch(() => activeConvo.value?.id, () => {
+                if (!window.NidoNative) return;
+                syncNidoProactiveContext(activeConvo.value);
+                scheduleTalkProactive();
+            });
             Vue.watch(() => talkSettings.provider, (provider) => {
                 // 只切换当前大脑，不改 Claude 自己保存的 Terminal / -p 执行偏好。
                 if (provider === 'openai-compatible') {
@@ -1379,8 +1402,14 @@ window.Rifugio.useTalk = function(ctx) {
                         content:String(messageContentForModel(message) || '').slice(0, 6000),
                     }))
                     .filter(message => message.content);
-                const lastUserAt = Number(lastUser?.id) || Date.parse(lastUser?.created_at || '') || 0;
-                const lastAnyAt = Number(lastAny?.id) || Date.parse(lastAny?.created_at || '') || lastUserAt;
+                const asEpoch = (message) => {
+                    const id = Number(message?.id);
+                    if (Number.isFinite(id) && id > 1000000000000) return id;
+                    const created = Date.parse(message?.created_at || message?.timestamp || '');
+                    return Number.isFinite(created) ? created : 0;
+                };
+                const lastUserAt = asEpoch(lastUser) || Date.now();
+                const lastAnyAt = asEpoch(lastAny) || lastUserAt;
                 try {
                     window.NidoNative.setProactiveContext(JSON.stringify({
                         conversationId:String(convo.id || ''),
