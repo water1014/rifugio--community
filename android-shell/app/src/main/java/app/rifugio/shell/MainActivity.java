@@ -145,16 +145,24 @@ public class MainActivity extends Activity {
                 Uri uri = request.getUrl();
                 WebResourceResponse localImage = interceptNidoImage(uri);
                 if (localImage != null) return localImage;
-                WebResourceResponse packaged = assetLoader.shouldInterceptRequest(uri);
-                return packaged != null ? packaged : interceptPackagedAsset(uri);
+                // Serve APK-bundled files directly first. Some vendor WebView builds
+                // fail to resolve a root-mounted WebViewAssetLoader path ("/index.html")
+                // even though the asset exists. The direct APK asset stream is deterministic.
+                WebResourceResponse direct = interceptPackagedAsset(uri);
+                if (direct != null) return direct;
+                return assetLoader.shouldInterceptRequest(uri);
             }
 
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
                 Uri uri = Uri.parse(url);
                 WebResourceResponse localImage = interceptNidoImage(uri);
                 if (localImage != null) return localImage;
-                WebResourceResponse packaged = assetLoader.shouldInterceptRequest(uri);
-                return packaged != null ? packaged : interceptPackagedAsset(uri);
+                // Serve APK-bundled files directly first. Some vendor WebView builds
+                // fail to resolve a root-mounted WebViewAssetLoader path ("/index.html")
+                // even though the asset exists. The direct APK asset stream is deterministic.
+                WebResourceResponse direct = interceptPackagedAsset(uri);
+                if (direct != null) return direct;
+                return assetLoader.shouldInterceptRequest(uri);
             }
 
             @Override public void onReceivedError(WebView view, WebResourceRequest request,
