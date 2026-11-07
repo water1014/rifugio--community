@@ -85,11 +85,11 @@ The Android/Rifugio setup must support all three user-requested routes:
 - Highest-priority next work: remove manual server URL setup by configuring a stable HTTPS service origin; deploy and harden the backend; finish provider alignment for every AI feature; wire device registration from the Android bridge to authenticated API calls; configure a real push delivery path; and run installation, process-death, background delivery, notification tap, and upgrade/data-retention tests on a physical Android device.
 
 
-## Native push bridge audit (2026-11-07)
+## Native push integration audit (2026-11-07)
 
-- The Android project currently compiles and a debug APK artifact exists, but compilation alone does not prove notification delivery.
-- Audit found that the Android activity emitted FCM-token and UnifiedPush-subscription browser events, while the web app did not previously listen for them. Added `apps/web/js/06-nido-native-push.js` and loaded it after the Vue app to register FCM tokens at `/api/push/android/register` and UnifiedPush Web Push subscriptions at `/api/push/subscribe`, using the existing same-origin authenticated session.
-- The bridge restores tokens/subscriptions from Android SharedPreferences after WebView reload. It does not log token values or copy them into localStorage.
-- Notification tap payloads are emitted as `nido:open-conversation`; the Talk UI still needs a verified consumer that navigates to the correct conversation. Do not claim tap-through is complete until that consumer and cold-start behavior are device-tested.
-- FCM remains inactive until a Firebase project configuration and server service account are provisioned. UnifiedPush still requires a compatible distributor on the device. No live push delivery has been tested on physical hardware.
-- The first-run manual server URL screen remains. A stable production backend/domain and deployment configuration are still required before this can become a ready-to-use consumer APK.
+- The Android project compiled successfully in an earlier workflow run and produced a debug APK artifact. That artifact predates subsequent source changes and is not the latest build.
+- The Talk module already owns native push registration. On mount and after the `refuge-authed` event it reads the native FCM token / UnifiedPush subscription, registers them through the same-origin authenticated endpoints, and listens for token/subscription refresh events. A separate duplicate bootstrap file was briefly added during audit, then removed to avoid duplicate registration requests.
+- Android notification taps are persisted by `MainActivity` as a pending conversation/message payload and emitted as `nido:open-conversation`. The Talk module has a consumer that looks up the conversation, loads it from the API if needed, calls `selectTalk(id)`, and clears the pending payload after success. This is code-path coverage only; cold-start and warm-start navigation still require physical-device testing.
+- FCM is optional and inactive until a Firebase `google-services.json` and server-side `FCM_SERVICE_ACCOUNT_JSON` are provisioned. UnifiedPush requires a compatible distributor installed/configured on the device. No live push delivery has been verified on hardware.
+- The first-run manual server URL screen remains. A stable production backend/domain and deployment configuration are required before a ready-to-use consumer APK can be produced.
+- Push registration and notification tap navigation must be verified end-to-end with the actual authenticated owner session. Do not treat successful Gradle compilation as push-delivery acceptance.
