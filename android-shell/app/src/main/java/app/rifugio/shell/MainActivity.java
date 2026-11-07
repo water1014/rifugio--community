@@ -714,10 +714,9 @@ public class MainActivity extends Activity {
                     editor.putLong(NidoProactiveWorker.KEY_NEXT_DUE, 0);
                 }
                 editor.apply();
-                JSONObject config = new JSONObject(local.getString(NidoProactiveWorker.KEY_CONFIG, "{}"));
-                if (config.optBoolean("enabled", false) && config.optBoolean("scriptEnabled", true)) {
-                    scheduleNidoProactiveWork(true);
-                }
+                // The periodic worker is scheduled when proactive settings are enabled.
+                // Do not UPDATE it for every chat snapshot: WorkManager may keep postponing
+                // the first run while the user is actively chatting.
             } catch (Exception error) {
                 android.util.Log.w("NidoProactive", "Could not update local proactive context", error);
             }
