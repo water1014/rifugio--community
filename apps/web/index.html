@@ -1027,10 +1027,8 @@
                     <div v-if="port.availableModels.length" class="room-model-pills">
                         <button v-for="m in port.availableModels.slice(0, 24)" :key="port.id + '-' + m" @click="port.model=m; saveChatroomPorts()">{{ m }}</button>
                     </div>
-                    <template v-if="port.id !== 'cc'">
-                        <label class="talk-switch"><input type="checkbox" v-model="port.rifugio_experience" @change="saveChatroomPorts"><span>使用全部 Nido 恋爱体验工具</span></label>
-                        <p class="talk-settings-note">包含记忆、Dream、健康、音乐、生图、表情包和玩具；永不包含终端、VPS 或命令执行。</p>
-                    </template>
+                    <label class="talk-switch"><input type="checkbox" v-model="port.rifugio_experience" @change="saveChatroomPorts"><span>使用 Nido 角色体验工具</span></label>
+                    <p class="talk-settings-note">允许这个 API 端口调用已启用的记忆、Dream、音乐、生图、表情包等角色体验工具；不包含终端、VPS 或命令执行。</p>
                     <label>AI 备注 / 角色设定</label>
                     <textarea v-model="port.persona" @change="saveChatroomPorts" rows="2" placeholder="这个端口在聊天室里的角色设定"></textarea>
                     <label>前端消息渲染切分正则</label>
