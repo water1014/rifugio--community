@@ -136,3 +136,23 @@ test('Nido Android is a standalone local-first app and does not require a hosted
   assert.doesNotMatch(manifest, /INTERNET.*required="true"/);
   assert.match(gradle, /androidx\.work:work-runtime/);
 });
+
+test('standalone Nido memory buckets are stored and managed locally without server calls', () => {
+  const memoria = read('apps/web/js/apps/15-memoria.js');
+  assert.match(memoria, /NIDO_LOCAL_MEMORY_KEY = 'nido-local-memory-v1'/);
+  assert.match(memoria, /const readLocalMemories = \(\) =>/);
+  assert.match(memoria, /const writeLocalMemories = \(items\) =>/);
+  assert.match(memoria, /const saveLocalMemory = \(item\) =>/);
+  assert.match(memoria, /if \(isNidoLocalMemory\(\)\) \{[\s\S]*?refreshLocalMemoryState\(\);[\s\S]*?return;/);
+  assert.match(memoria, /if \(isNidoLocalMemory\(\)\) \{[\s\S]*?bucket_type:'feel'[\s\S]*?return;/);
+  assert.match(memoria, /本地记忆已启用。自动 Dream 整理尚未接入本地模型流程/);
+  assert.match(memoria, /if \(isNidoLocalMemory\(\)\) \{[\s\S]*?readLocalMemories\(\)\.filter/);
+  assert.match(memoria, /本地导入只接受结构化 JSON 记忆文件/);
+});
+
+test('Android WebView supports local JSON file import through the system picker', () => {
+  assert.match(native, /import android\.webkit\.ValueCallback;/);
+  assert.match(native, /onShowFileChooser\(WebView view, ValueCallback<Uri\[\]> callback/);
+  assert.match(native, /WebChromeClient\.FileChooserParams\.parseResult/);
+  assert.match(native, /FILE_CHOOSER_REQUEST_CODE/);
+});
