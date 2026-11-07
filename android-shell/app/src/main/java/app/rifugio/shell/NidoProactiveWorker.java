@@ -20,6 +20,7 @@ import java.net.InetAddress;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
+import java.security.MessageDigest;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -56,6 +57,11 @@ public class NidoProactiveWorker extends Worker {
             JSONObject settings = new JSONObject(prefs.getString(KEY_CONFIG, "{}"));
             JSONObject chat = new JSONObject(prefs.getString(KEY_CONTEXT, "{}"));
             if (!settings.optBoolean("enabled", false) || !settings.optBoolean("scriptEnabled", true)) return Result.success();
+            String conversationId = chat.optString("conversationId", "").trim();
+            if (conversationId.isEmpty()) {
+                prefs.edit().putString(KEY_LAST_ERROR, "没有可用的当前聊天，已跳过主动消息").apply();
+                return Result.success();
+            }
 
             long now = System.currentTimeMillis();
             long lastUserAt = chat.optLong("lastUserAt", 0);
@@ -143,8 +149,7 @@ public class NidoProactiveWorker extends Worker {
             if (endpoint.getHost().equalsIgnoreCase("opencode.ai")
                     || settings.optString("provider", "").toLowerCase(Locale.ROOT).contains("opencode")) {
                 SharedPreferences sessionPrefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-                String conversationId = chat.optString("conversationId", "default").trim();
-                String sessionKey = "opencode_session_" + Integer.toHexString(conversationId.hashCode());
+                String sessionKey = "opencode_session_" + sessionPreferenceSuffix(conversationId);
                 String session = sessionPrefs.getString(sessionKey, "");
                 if (session.isEmpty()) {
                     session = "ses_" + java.util.UUID.randomUUID().toString().replace("-", "");
@@ -176,8 +181,6 @@ public class NidoProactiveWorker extends Worker {
             String content = extractMessageText(answer == null ? null : answer.opt("content")).trim();
             if (content.isEmpty()) throw new IllegalStateException("主动消息模型返回了空内容");
 
-            String conversationId = chat.optString("conversationId", "");
-            if (conversationId.isEmpty()) throw new IllegalStateException("没有可用的当前聊天");
             long messageId = now;
             String time = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(now));
             JSONObject message = new JSONObject()
@@ -227,6 +230,11 @@ public class NidoProactiveWorker extends Worker {
         } finally {
             if (connection != null) connection.disconnect();
         }
+    }
+
+    private static String sessionPreferenceSuffix(String conversationId) throws Exception {
+        byte[] digest = MessageDigest.getInstance("SHA-256").digest(conversationId.getBytes(StandardCharsets.UTF_8));
+        return Base64.encodeToString(digest, Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
     }
 
     private static long computeDelay(JSONObject settings) {
