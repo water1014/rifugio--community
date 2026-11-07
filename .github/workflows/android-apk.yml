@@ -40,6 +40,10 @@ jobs:
         run: npm test --prefix apps/api
       - name: Run web tests
         run: npm run test:web
+      - name: Install matching Vue template compiler
+        run: npm install --no-save --prefix apps/api @vue/compiler-dom@3.5.39 --registry=https://registry.npmjs.org --replace-registry-host=always
+      - name: Compile complete Vue app template
+        run: node apps/web/tools/validate-vue-template.mjs
       - name: Validate Android web JavaScript assets
         run: |
           find apps/web/js -type f -name '*.js' -print0 | xargs -0 -n1 node --check
