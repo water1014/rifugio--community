@@ -530,7 +530,7 @@ window.Rifugio.useTalk = function(ctx) {
                             provider: kind === 'image' ? talkSettings.imageProvider : (isTextModels ? talkSettings.apiProtocol : talkSettings.provider),
                             base_url: kind === 'image' ? normalizeImageBaseUrl(talkSettings.imageBaseUrl, talkSettings.imageProvider) : talkSettings.baseUrl,
                             api_key: kind === 'image' ? talkSettings.naiApiKey : talkSettings.apiKey,
-                            custom_headers: kind === 'text' ? talkSettings.customHeaders : undefined,
+                            custom_headers: isTextModels ? talkSettings.customHeaders : undefined,
                         }),
                     });
                     const data = await res.json().catch(() => ({}));
