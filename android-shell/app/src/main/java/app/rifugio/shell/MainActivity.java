@@ -393,6 +393,16 @@ public class MainActivity extends Activity {
         String extension = mime.equals("image/webp") ? ".webp" : (mime.equals("image/jpeg") ? ".jpg" : ".png");
         File directory = new File(getFilesDir(), "nido-images");
         if (!directory.exists() && !directory.mkdirs()) throw new IllegalStateException("无法创建本地图片目录");
+        File[] existing = directory.listFiles();
+        if (existing != null && existing.length >= 200) {
+            java.util.Arrays.sort(existing, java.util.Comparator.comparingLong(File::lastModified));
+            for (int i = 0; i <= existing.length - 200; i++) {
+                String oldName = existing[i].getName();
+                if (oldName.matches("[a-zA-Z0-9_-]{1,80}\\\\.(png|webp|jpg)$")) {
+                    try { existing[i].delete(); } catch (Exception ignored) {}
+                }
+            }
+        }
         String name = Long.toString(System.currentTimeMillis(), 36) + "-"
                 + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 12) + extension;
         File target = new File(directory, name);
@@ -406,7 +416,7 @@ public class MainActivity extends Activity {
         String path = uri.getPath() == null ? "" : uri.getPath();
         if (!path.startsWith("/nido-images/")) return null;
         String name = path.substring("/nido-images/".length());
-        if (!name.matches("[a-zA-Z0-9_-]{1,80}\\.(png|webp|jpg)$")) return new WebResourceResponse("text/plain", "UTF-8", null);
+        if (!name.matches("[a-zA-Z0-9_-]{1,80}\\.(png|webp|jpg)$")) return null;
         File target = new File(new File(getFilesDir(), "nido-images"), name);
         if (!target.isFile()) return new WebResourceResponse("text/plain", "UTF-8", null);
         String mime = name.endsWith(".webp") ? "image/webp" : (name.endsWith(".jpg") ? "image/jpeg" : "image/png");
