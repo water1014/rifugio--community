@@ -14,6 +14,8 @@ window.Rifugio.useTalk = function(ctx) {
             const NIDO_LOCAL_DB_NAME = 'nido-local-data-v1';
             let nidoLocalDbPromise = null;
             let nidoLocalPersistTimer = null;
+            // Do not let an early UI save overwrite the full IndexedDB snapshot before restore finishes.
+            let nidoLocalRestoreReady = !Boolean(window.NidoNative);
             const openNidoLocalDb = () => {
                 if (!window.indexedDB) return Promise.reject(new Error('当前 WebView 不支持本地数据库'));
                 if (nidoLocalDbPromise) return nidoLocalDbPromise;
@@ -29,7 +31,7 @@ window.Rifugio.useTalk = function(ctx) {
                 return nidoLocalDbPromise;
             };
             const writeNidoLocalTalk = async () => {
-                if (!isNidoLocalApp()) return;
+                if (!isNidoLocalApp() || !nidoLocalRestoreReady) return;
                 const convos = talk.convos.map(convo => {
                     const copy = JSON.parse(JSON.stringify(convo));
                     ['_messagesLoaded','_messagesLoading','_messagesPageLoaded','_messagesHasMore','_messagesBefore','_olderMessagesLoading','_needsFullPush'].forEach(key => delete copy[key]);
@@ -96,9 +98,12 @@ window.Rifugio.useTalk = function(ctx) {
                     if (snapshot.collapsedGroups && typeof snapshot.collapsedGroups === 'object') talk.collapsedGroups = snapshot.collapsedGroups;
                     if (Array.isArray(snapshot.customGroups)) talk.customGroups = snapshot.customGroups;
                     talk.convos.forEach(sanitizeTalkConvo);
-                    saveTalk();
                 } catch (error) {
                     console.warn('[Nido] IndexedDB restore skipped:', error?.message || error);
+                } finally {
+                    // Even an empty database or a recoverable read error must release queued saves.
+                    nidoLocalRestoreReady = true;
+                    saveTalk();
                 }
             };
             const TALK_MODELS = [
