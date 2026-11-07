@@ -11,6 +11,81 @@ window.Rifugio.useTalk = function(ctx) {
             const isNidoLocalApp = () => Boolean(window.NidoNative);
             const TALK_SETTINGS_LS = 'rifugio-talk-settings-v1';
             const TALK_MOMENTS_LS = 'rifugio-talk-moments-v1';
+            const NIDO_LOCAL_DB_NAME = 'nido-local-data-v1';
+            let nidoLocalDbPromise = null;
+            let nidoLocalPersistTimer = null;
+            const openNidoLocalDb = () => {
+                if (!window.indexedDB) return Promise.reject(new Error('当前 WebView 不支持本地数据库'));
+                if (nidoLocalDbPromise) return nidoLocalDbPromise;
+                nidoLocalDbPromise = new Promise((resolve, reject) => {
+                    const request = indexedDB.open(NIDO_LOCAL_DB_NAME, 1);
+                    request.onupgradeneeded = () => {
+                        const db = request.result;
+                        if (!db.objectStoreNames.contains('state')) db.createObjectStore('state');
+                    };
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error || new Error('本地数据库打开失败'));
+                });
+                return nidoLocalDbPromise;
+            };
+            const writeNidoLocalTalk = async () => {
+                if (!isNidoLocalApp()) return;
+                const convos = talk.convos.map(convo => {
+                    const copy = JSON.parse(JSON.stringify(convo));
+                    ['_messagesLoaded','_messagesLoading','_messagesPageLoaded','_messagesHasMore','_messagesBefore','_olderMessagesLoading','_needsFullPush'].forEach(key => delete copy[key]);
+                    return copy;
+                });
+                const snapshot = {
+                    convos,
+                    activeId:talk.activeId,
+                    collapsedGroups:talk.collapsedGroups,
+                    customGroups:talk.customGroups,
+                    updatedAt:Date.now(),
+                };
+                const db = await openNidoLocalDb();
+                await new Promise((resolve, reject) => {
+                    const tx = db.transaction('state', 'readwrite');
+                    tx.objectStore('state').put(snapshot, 'talk');
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error || new Error('本地聊天保存失败'));
+                    tx.onabort = () => reject(tx.error || new Error('本地聊天保存已取消'));
+                });
+            };
+            const restoreNidoLocalTalk = async () => {
+                if (!isNidoLocalApp()) return;
+                try {
+                    const db = await openNidoLocalDb();
+                    const snapshot = await new Promise((resolve, reject) => {
+                        const request = db.transaction('state', 'readonly').objectStore('state').get('talk');
+                        request.onsuccess = () => resolve(request.result || null);
+                        request.onerror = () => reject(request.error || new Error('本地聊天读取失败'));
+                    });
+                    if (!snapshot || !Array.isArray(snapshot.convos)) return;
+                    const localById = new Map(talk.convos.map(convo => [String(convo.id), convo]));
+                    const restored = snapshot.convos.map(saved => {
+                        const local = localById.get(String(saved.id));
+                        const byId = new Map();
+                        (saved.messages || []).forEach(message => byId.set(String(message?.id ?? ('saved-' + byId.size)), message));
+                        (local?.messages || []).forEach(message => byId.set(String(message?.id ?? ('local-' + byId.size)), message));
+                        const messages = Array.from(byId.values()).sort((a, b) => {
+                            const left = Number(a?.id) || Date.parse(a?.created_at || '') || 0;
+                            const right = Number(b?.id) || Date.parse(b?.created_at || '') || 0;
+                            return left - right;
+                        });
+                        return normalizeTalkConvoMeta({ ...saved, ...(local || {}), messages });
+                    });
+                    const restoredIds = new Set(restored.map(convo => String(convo.id)));
+                    talk.convos.forEach(convo => { if (!restoredIds.has(String(convo.id))) restored.push(convo); });
+                    talk.convos = restored;
+                    if (snapshot.activeId && restoredIds.has(String(snapshot.activeId))) talk.activeId = snapshot.activeId;
+                    if (snapshot.collapsedGroups && typeof snapshot.collapsedGroups === 'object') talk.collapsedGroups = snapshot.collapsedGroups;
+                    if (Array.isArray(snapshot.customGroups)) talk.customGroups = snapshot.customGroups;
+                    talk.convos.forEach(sanitizeTalkConvo);
+                    saveTalk();
+                } catch (error) {
+                    console.warn('[Nido] IndexedDB restore skipped:', error?.message || error);
+                }
+            };
             const TALK_MODELS = [
                 { id: 'default', label: 'Claude Code 默认' },
                 { id: 'claude-sonnet-5', label: 'Claude Sonnet 5' },
@@ -724,7 +799,14 @@ window.Rifugio.useTalk = function(ctx) {
                     });
                     localStorage.setItem(TALK_LS, JSON.stringify({ convos: slim, activeId: talk.activeId, collapsedGroups:talk.collapsedGroups, customGroups:talk.customGroups }));
                 } catch(e) {}
+                if (isNidoLocalApp() && window.indexedDB) {
+                    clearTimeout(nidoLocalPersistTimer);
+                    nidoLocalPersistTimer = setTimeout(() => {
+                        writeNidoLocalTalk().catch(error => console.warn('[Nido] 本地聊天保存失败：', error?.message || error));
+                    }, 350);
+                }
             };
+            restoreNidoLocalTalk();
             const syncTalkMomentsToServer = async (options = {}) => {
                 if (isNidoLocalApp()) return false;
                 const moments = talkMomentsStoragePayload();
