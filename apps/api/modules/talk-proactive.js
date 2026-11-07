@@ -17,6 +17,7 @@ function createTalkProactive(ctx = {}) {
     writeJsonSetting,
     sanitizeTalkMessages,
     sendWebPushNotification,
+    sendAndroidPushNotification,
     encrypt,
     decrypt,
     maskKey,
@@ -449,12 +450,21 @@ function createTalkProactive(ctx = {}) {
         barkResult = await sendTalkBark(settings.barkUrl, title, content.slice(0, 180) || '发来一条新消息');
         barkResult.placeholderFallback = true;
       }
-      const pushResult = await sendWebPushNotification({
+      const pushPayload = {
         title,
         body: content.slice(0, 180),
-        tag: `rifugio-talk-${convo.id}`,
-        data: { app: 'talk', convoId: convo.id, messageId: msg.id },
-      });
+        tag: `nido-talk-${convo.id}`,
+        conversationId: convo.id,
+        messageId: msg.id,
+        data: { app: 'nido', convoId: convo.id, conversationId: convo.id, messageId: msg.id },
+      };
+      const webPushResult = typeof sendWebPushNotification === 'function'
+        ? await sendWebPushNotification(pushPayload)
+        : { ok: false, unavailable: true };
+      const androidPushResult = typeof sendAndroidPushNotification === 'function'
+        ? await sendAndroidPushNotification(pushPayload)
+        : { ok: false, unavailable: true };
+      const pushResult = { web: webPushResult, android: androidPushResult };
       pushTalkProactiveEvent({ type: 'talk-proactive-message', conversationId: convo.id, message: msg, bark: barkResult, push: pushResult });
     } catch (e) {
       writeTalkActivity({ nextDueAt: Date.now() + 5 * 60 * 1000 });
