@@ -307,6 +307,11 @@ window.Rifugio.useTalk = function(ctx) {
             if (talkSettings.provider === 'claude-code') talkSettings.provider = 'openai-compatible';
             if (!['compatible', 'opencode-go', 'deepseek', 'anthropic'].includes(String(talkSettings.apiProtocol || ''))) talkSettings.apiProtocol = 'opencode-go';
             if (String(talkSettings.baseUrl || '').includes('opencode.ai') && talkSettings.apiProtocol === 'compatible') talkSettings.apiProtocol = 'opencode-go';
+            // Keep model IDs isolated per provider so switching gateways never sends a model from another service.
+            if (!talkSettings.apiModelsByProvider || typeof talkSettings.apiModelsByProvider !== 'object' || Array.isArray(talkSettings.apiModelsByProvider)) talkSettings.apiModelsByProvider = {};
+            const activeApiProtocol = String(talkSettings.apiProtocol || 'opencode-go');
+            if (talkSettings.apiModel && !talkSettings.apiModelsByProvider[activeApiProtocol]) talkSettings.apiModelsByProvider[activeApiProtocol] = String(talkSettings.apiModel).trim();
+            let lastTalkApiProtocol = activeApiProtocol;
             // Nido Talk uses the selected API provider as its only default execution path.
             // Migrate legacy Claude Terminal / -p preferences so background status polling never depends on a Claude subscription.
             talkSettings.claudeExecutionMode = 'agent';
@@ -412,10 +417,23 @@ window.Rifugio.useTalk = function(ctx) {
                 applyGlobalFont();
             };
             const onTalkApiProtocolChange = () => {
+                const nextProtocol = String(talkSettings.apiProtocol || 'opencode-go');
+                const previousProtocol = String(lastTalkApiProtocol || 'opencode-go');
+                if (previousProtocol !== nextProtocol) {
+                    if (talkSettings.apiModel) talkSettings.apiModelsByProvider[previousProtocol] = String(talkSettings.apiModel).trim();
+                    talkSettings.apiModel = String(talkSettings.apiModelsByProvider[nextProtocol] || '').trim();
+                    lastTalkApiProtocol = nextProtocol;
+                    // Do not let the active conversation's old model silently leak into the newly selected provider.
+                    if (activeConvo.value) {
+                        activeConvo.value.model = talkSettings.apiModel;
+                        saveTalk();
+                        pushConvoMeta(activeConvo.value);
+                    }
+                }
                 const currentBase = String(talkSettings.baseUrl || '').trim();
-                if (talkSettings.apiProtocol === 'deepseek' && (!currentBase || currentBase.includes('opencode.ai'))) {
+                if (nextProtocol === 'deepseek' && (!currentBase || currentBase.includes('opencode.ai'))) {
                     talkSettings.baseUrl = 'https://api.deepseek.com/v1';
-                } else if (talkSettings.apiProtocol === 'opencode-go' && (!currentBase || currentBase.includes('api.deepseek.com'))) {
+                } else if (nextProtocol === 'opencode-go' && (!currentBase || currentBase.includes('api.deepseek.com'))) {
                     talkSettings.baseUrl = 'https://opencode.ai/zen/go';
                 }
                 saveTalkSettings();
@@ -1575,9 +1593,12 @@ window.Rifugio.useTalk = function(ctx) {
                 endTalkConvoDrag();
             };
             const onModelChange = () => {
-                // API 模型由用户配置；同步到当前会话并记住，供新对话使用。
+                // Remember model IDs independently for each API provider.
+                const provider = String(talkSettings.apiProtocol || 'opencode-go');
+                talkSettings.apiModel = String(talkSettings.apiModel || '').trim();
+                talkSettings.apiModelsByProvider[provider] = talkSettings.apiModel;
                 if (activeConvo.value) activeConvo.value.model = talkSettings.apiModel;
-                localStorage.setItem('rifugio-talk-model', talkSettings.apiModel || '');
+                localStorage.setItem('rifugio-talk-model', talkSettings.apiModel);
                 saveTalkSettings();
                 if (activeConvo.value) { saveTalk(); pushConvoMeta(activeConvo.value); }
             };
