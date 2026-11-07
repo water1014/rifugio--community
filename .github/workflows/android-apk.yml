@@ -22,6 +22,15 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.18.0'
+          cache: npm
+          cache-dependency-path: apps/api/package-lock.json
+      - name: Install API dependencies
+        run: npm ci --prefix apps/api
+      - name: Run API contract tests
+        run: npm test --prefix apps/api
       - name: Build debug APK
         working-directory: android-shell
         run: gradle --no-daemon assembleDebug
