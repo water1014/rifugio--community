@@ -1,5 +1,10 @@
 plugins { id 'com.android.application' }
 
+// Apply only when a real Firebase Android app configuration is supplied.
+if (file('google-services.json').exists()) {
+    apply plugin: 'com.google.gms.google-services'
+}
+
 android {
     namespace 'app.rifugio.shell'
     compileSdk 35
