@@ -2802,13 +2802,13 @@
                                     </label>
                                     <div class="talk-notify-actions">
                                         <button type="button" @click="requestTalkNotificationPermission">授权通知</button>
-                                        <button type="button" @click="enableNidoNativePush">开启后台推送</button>
+                                        <button v-if="!talk.localAndroidMode" type="button" @click="enableNidoNativePush">开启后台推送</button>
                                         <button type="button" @click="testTalkWebPush">测试</button>
                                     </div>
                                     <p v-if="talkSettings.webPushStatus" class="talk-css-help talk-notify-status">{{ talkSettings.webPushStatus }}</p>
 	                                    <label class="talk-switch">
 	                                        <input type="checkbox" v-model="talkSettings.proactiveEnabled">
-	                                        <span>主动消息：后端定时检测，聊天中自动跳过</span>
+	                                        <span>主动消息：{{ talk.localAndroidMode ? 'Android 本机后台定时检测' : '后端定时检测' }}，聊天中自动跳过</span>
 	                                    </label>
 	                                    <label class="talk-switch">
 	                                        <input type="checkbox" v-model="talkSettings.proactiveScriptEnabled">
@@ -2823,7 +2823,7 @@
 	                                        <input v-model="talkSettings.proactiveEndTime" type="time" placeholder="结束时间">
 	                                    </div>
 	                                    <input v-model="talkSettings.proactiveTimezone" placeholder="主动脚本时区，例如 Asia/Kuala_Lumpur">
-	                                    <input v-model="talkSettings.proactiveText" placeholder="主动消息提示词 / 风格补充，可空；真正触发文案由后端按 X 分钟动态注入">
+	                                    <input v-model="talkSettings.proactiveText" placeholder="主动消息提示词 / 风格补充，可空；由 Nido 按设定时间自动生成">
 		                                    <input v-model="talkSettings.barkUrl" placeholder="Bark URL：如 https://api.day.app/key/Title/Content?icon=...">
 		                                    <p class="talk-settings-note">Bark 不由前端自动推送。Nido 的主动消息由你配置的 API 模型生成；Bark 仅作为额外通知通道。</p>
                                     <input v-model="talkSettings.globalFontUrl" placeholder="全局字体 URL（woff2/ttf/css）">
