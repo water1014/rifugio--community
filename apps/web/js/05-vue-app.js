@@ -1636,7 +1636,7 @@
             const CHATROOM_STATE_LS = 'rifugio-chatroom-state-v1';
             const CHATROOM_PROFILE_LS = 'rifugio-chatroom-profile-v1';
             const makeRoomPort = (id, label, persona, model='', provider='auto') => ({
-                id, label, persona, avatar:'', base_url:'', api_key:'', model, provider, enabled:true, availableModels:[], status:'', cache_status:'',
+                id, label, persona, avatar:'', base_url:'', api_key:'', custom_headers:'', model, provider, enabled:true, availableModels:[], status:'', cache_status:'',
                 rifugio_experience:id !== 'cc',
                 split_regex:'(?<=。。)\\s*|(?<=\\.\\.)\\s*|(?<=[。！？!?~…])(?![。！？!?~…])\\s*'
             });
@@ -1664,6 +1664,7 @@
                 target.avatar = saved.avatar || target.avatar || '';
                 target.base_url = saved.base_url || saved.baseUrl || target.base_url;
                 target.api_key = saved.api_key || saved.apiKey || target.api_key;
+                target.custom_headers = saved.custom_headers || saved.customHeaders || target.custom_headers || '';
                 target.model = saved.model || target.model;
                 target.provider = saved.provider || target.provider || 'auto';
                 target.rifugio_experience = saved.rifugio_experience !== false && target.id !== 'cc';
@@ -1931,7 +1932,7 @@
                         r = await fetch('/api/chatroom-api/v1/models', {
                             method:'POST',
                             headers:{ 'Content-Type':'application/json' },
-                            body:JSON.stringify({ provider:port.provider || 'auto', base_url:port.base_url, api_key:port.api_key, model:port.model })
+                            body:JSON.stringify({ provider:port.provider || 'auto', base_url:port.base_url, api_key:port.api_key, model:port.model, custom_headers:port.custom_headers })
                         });
                     }
                     const j = await r.json();
