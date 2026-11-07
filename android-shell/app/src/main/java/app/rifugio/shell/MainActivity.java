@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.content.SharedPreferences;
 import android.content.BroadcastReceiver;
 import android.content.IntentFilter;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
@@ -158,7 +159,7 @@ public class MainActivity extends Activity {
         try {
             FirebaseApp app = FirebaseApp.initializeApp(this);
             if (app == null) return; // Firebase project config has not been supplied yet.
-            FirebaseMessaging.getInstance(app).getToken().addOnSuccessListener(token -> {
+            FirebaseMessaging.getInstance().getToken().addOnSuccessListener(token -> {
                 getSharedPreferences(NidoMessagingService.PREFS, MODE_PRIVATE)
                         .edit().putString(NidoMessagingService.KEY_TOKEN, token).apply();
                 dispatchNativePushToken();
