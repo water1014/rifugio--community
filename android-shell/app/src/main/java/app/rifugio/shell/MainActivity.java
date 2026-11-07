@@ -398,7 +398,7 @@ public class MainActivity extends Activity {
             java.util.Arrays.sort(existing, java.util.Comparator.comparingLong(File::lastModified));
             for (int i = 0; i <= existing.length - 200; i++) {
                 String oldName = existing[i].getName();
-                if (oldName.matches("[a-zA-Z0-9_-]{1,80}\\\\.(png|webp|jpg)$")) {
+                if (oldName.matches("[a-zA-Z0-9_-]{1,80}\\.(png|webp|jpg)$")) {
                     try { existing[i].delete(); } catch (Exception ignored) {}
                 }
             }
